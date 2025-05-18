@@ -1,0 +1,12 @@
+[project]
+name = "ecommerce-reports-prefect"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.2.3",
+    "prefect[email,slack]>=3.4.1",
+    "pytz>=2025.2",
+    "requests>=2.32.3",
+]
