@@ -1,11 +1,11 @@
 # 📊 Ecommerce Reports Prefect
 
-This repository contains code to generate daily ecommerce sell reports from Apilo and Baselinker APIs. The workflows are defined using Prefect to orchestrate tasks like fetching exchange rates, gathering statistics, and creating formatted report artifacts.
+Generate daily ecommerce sell reports from Apilo and Baselinker APIs. The workflows are defined using Prefect to orchestrate tasks like fetching exchange rates, gathering statistics, and creating formatted report artifacts.
 
 ## Overview
 
 - **Prefect Workflows:**  
-  The repository uses Prefect flows to manage tasks such as:
+  The project uses Prefect flows to manage tasks such as:
   - Retrieving exchange rates
   - Fetching sell statistics from Apilo and Baselinker
   - Converting currency values to PLN
@@ -46,13 +46,13 @@ Before running the flows, ensure you have properly defined the following Secrets
 
 #### Email via Gmail
 
-Secret `gmail-app-pass` of type `EmailServerCredentials` for Gmail account, containing App Password token
-Variable `emails-to-send` which is a list of strings of e-mail addresses to which emails should be sent.
+- Secret `gmail-app-pass` of type `EmailServerCredentials` for Gmail account, containing App Password token,
+- Variable `emails-to-send` which is a list of strings of e-mail addresses to which emails should be sent.
 
 #### Slack
 
-Secret `slack-oauth-token` of type `SlackCredentials` for Slack App, Slack bot OAuth token
-Variable `slack-channel` being a string with name of slack channel onto which the message should be sent. App slack bot should be added to the channel prior.
+- Secret `slack-oauth-token` of type `SlackCredentials` for Slack App, Slack bot OAuth token,
+- Variable `slack-channel` being a string with name of slack channel onto which the message should be sent. App slack bot should be added to the channel prior.
 
 ## Running and scheduling the flows
 
