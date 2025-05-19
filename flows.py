@@ -6,6 +6,7 @@ from prefect.variables import Variable
 from prefect_email import EmailServerCredentials, email_send_message
 from prefect_slack import SlackCredentials
 from prefect_slack.messages import send_chat_message
+from pydantic import BaseModel
 
 from src.api_exchange_rates import ExchangeRateApi, RapidApiException
 from src.api_handlers import ApiloApi, BaselinkerApi
@@ -102,10 +103,17 @@ def send_slack_message(message):
     send_chat_message.submit(
         slack_credentials=slack_credentials_block, channel=channel, text=message
     )
+    
+    
+class SellReportParams(BaseModel):
+    previous_days: int = 1
+    slack: bool = False
+    email: bool = False
 
 
 @flow(flow_run_name="Daily Sell Report: previous_days={previous_days}", log_prints=True)
-def get_sell_report(previous_days=1, slack=False, email=False):
+def get_sell_report(previous_days: int=1, slack: bool=False, email: bool=False):
+    
     logger = get_run_logger()
     exchange_rates = get_exchange_rates_all.submit()
     df_sell_apilo = gather_apilo_sell_statistics.submit(
