@@ -308,7 +308,8 @@ class ApiloApi(ApiHandlerBase):
         # df['gross_order_price_wo_delivery'] = df['total_paid']
         df["gross_order_price_wo_delivery"] = df["total_paid"] - df["delivery_price"]
 
-        target_currencies = df.groupby("source")["currency"].first().to_dict()
+        # target_currencies = df.groupby("source")["currency"].first().to_dict()
+        target_currencies = {source: "PLN" for source in df['source'].unique()}
 
         df["gross_order_price_wo_delivery_pln"] = df.apply(
             convert_to_target_currency,
@@ -323,6 +324,10 @@ class ApiloApi(ApiHandlerBase):
             ),
             currency=("currency", "first"),
         )
+        for source, target_currency in target_currencies.items():
+            if source in df_grouped.index:
+                df_grouped.at[source, 'currency'] = target_currency
+        
         return df_grouped, df
 
 
@@ -699,7 +704,8 @@ class BaselinkerApi(ApiHandlerBase):
         df["gross_order_price_wo_delivery"] = df["total_paid"] - df["delivery_price"]
         # df['gross_order_price_wo_delivery'] = df['total_paid']
 
-        target_currencies = df.groupby("source")["currency"].first().to_dict()
+        # target_currencies = df.groupby("source")["currency"].first().to_dict()
+        target_currencies = {source: "PLN" for source in df['source'].unique()}
 
         df["gross_order_price_wo_delivery_pln"] = df.apply(
             convert_to_target_currency,
@@ -714,4 +720,8 @@ class BaselinkerApi(ApiHandlerBase):
             ),
             currency=("currency", "first"),
         )
+        for source, target_currency in target_currencies.items():
+            if source in df_grouped.index:
+                df_grouped.at[source, 'currency'] = target_currency
+                
         return df_grouped, df
