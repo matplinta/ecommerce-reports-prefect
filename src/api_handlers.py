@@ -81,6 +81,14 @@ class ApiloApi(ApiHandlerBase):
         else:
             print(f"Error: {response.status_code} - {response.text}")
             return None
+        
+    class APIRequestError(Exception):
+        """Custom exception for API request failures."""
+        def __init__(self, status_code, response_text, message="API request failed"):
+            self.status_code = status_code
+            self.response_text = response_text
+            self.message = message
+            super().__init__(f"{message} - Status Code: {status_code}, Response Text: {response_text}")
 
     def _make_request(self, query_params=None, path="") -> requests.Response:
         if query_params is None:
@@ -91,7 +99,12 @@ class ApiloApi(ApiHandlerBase):
             "Authorization": f"Bearer {self.token}",
         }
         request_url = f"{self.url}/rest/api/{path}"
-        return requests.get(request_url, headers=headers, params=query_params).json()
+        response = requests.get(request_url, headers=headers, params=query_params)
+        try:
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise self.APIRequestError(response.status_code, response.text, "HTTP request failed")
 
     def get_order_sources(self):
         """Returns: (example data anonymized)
