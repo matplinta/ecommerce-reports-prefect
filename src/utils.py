@@ -50,6 +50,19 @@ def get_summary_table(df_sell, rename_dict):
     return summary
 
 
+def get_summary_table_simple(df_sell, rename_dict):
+    summary = []
+    for index, row in df_sell.iterrows():
+        summary.append(
+            {
+                "marketplace": rename_dict.get(index, index),
+                "orders_count": int(row["order_count"]),
+                "revenue": int(row['total_net_payment_pln'])
+            }
+        )
+    return summary
+
+
 def generate_markdown_table(summary):
     headers = ["Marketplace", "Order Count", "Total Net Payment PLN"]
     header_line = "| " + " | ".join(headers) + " |"

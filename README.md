@@ -54,6 +54,13 @@ Before running the flows, ensure you have properly defined the following Secrets
 - Secret `slack-oauth-token` of type `SlackCredentials` for Slack App, Slack bot OAuth token,
 - Variable `slack-channel` being a string with name of slack channel onto which the message should be sent. App slack bot should be added to the channel prior.
 
+#### Google Sheets
+
+- Secret `sheets-service-account` of type `GcpCredentials` for GCP service account credentials info,
+- Variable `sheet-id` being a string with sheet-id from Google Sheets
+- Variable `worksheet-name` [optional] - worksheet name, defaults to "Dane"
+
+
 ## Running and scheduling the flows
 
 Please follow instructions for quickstart from prefect docs: https://docs.prefect.io/v3/get-started/quickstart
@@ -81,6 +88,7 @@ Gathers sell statistics from Apilo and Baselinker APIs, converts currency values
 - `previous_days` (int): Number of previous days to include in the report  
 - `slack` (bool): If true, sends the report to Slack  
 - `email` (bool): If true, sends the report via email
+- `sheets` (bool): If true, appends the report data to Google Sheets
 
 ### **refresh_apilo_token**  
 Refreshes the Apilo API token and updates the corresponding Prefect Secrets.  

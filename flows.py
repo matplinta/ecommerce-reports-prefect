@@ -1,9 +1,15 @@
+import datetime
+
+import gspread
 import pandas as pd
+import pytz
+from google.oauth2.service_account import Credentials
 from prefect import flow, get_run_logger, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.blocks.system import Secret
 from prefect.variables import Variable
 from prefect_email import EmailServerCredentials, email_send_message
+from prefect_gcp import GcpCredentials
 from prefect_slack import SlackCredentials
 from prefect_slack.messages import send_chat_message
 from pydantic import BaseModel
@@ -12,12 +18,15 @@ from src.api_exchange_rates import ExchangeRateApi, RapidApiException
 from src.api_handlers import ApiloApi, BaselinkerApi
 from src.utils import (
     convert_to_pln,
+    generate_html_email,
+    generate_markdown_table,
+    get_date_range,
     get_summary_string,
     get_summary_table,
-    generate_markdown_table,
-    generate_html_email,
-    get_date_range
+    get_summary_table_simple,
 )
+
+TIMEZONE = pytz.timezone("Europe/Warsaw")
 
 BASELINKER_TOKEN = Secret.load("baselinker-token").get()
 APILO_CLIENT_ID = Secret.load("apilo-client-id").get()
@@ -105,15 +114,41 @@ def send_slack_message(message):
     )
     
     
+@task(log_prints=True)
+def append_to_sheets_db(daily_sell_report, date: datetime.date):
+    SHEETS_CRED = GcpCredentials.load("sheets-service-account")
+    SHEET_ID = Variable.get("sheet-id")
+    WORKSHEET_NAME = Variable.get("worksheet-name", "Dane")
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = Credentials.from_service_account_info(
+        SHEETS_CRED.service_account_info.get_secret_value(), scopes=scopes
+    )
+    gc = gspread.authorize(creds)
+    sh  = gc.open_by_key(SHEET_ID)
+    ws  = sh.worksheet(WORKSHEET_NAME)
+    for row in daily_sell_report:
+        marketplace = row["marketplace"]
+        orders = int(row["orders_count"])
+        revenue = int(row["revenue"])
+        ws.append_row(
+            [date.isoformat(), marketplace, orders, revenue],
+            value_input_option="USER_ENTERED",
+        )
+
+
 class SellReportParams(BaseModel):
     previous_days: int = 1
     slack: bool = False
     email: bool = False
+    sheets: bool = False
 
 
 @flow(flow_run_name="Daily Sell Report: previous_days={previous_days}", log_prints=True)
-def get_sell_report(previous_days: int=1, slack: bool=False, email: bool=False):
-    
+def get_sell_report(previous_days: int=1, slack: bool=False, email: bool=False, sheets: bool=False):
+
     logger = get_run_logger()
     exchange_rates = get_exchange_rates_all.submit()
     df_sell_apilo = gather_apilo_sell_statistics.submit(
@@ -147,6 +182,11 @@ def get_sell_report(previous_days: int=1, slack: bool=False, email: bool=False):
         send_slack_message(
             f"Dzienny raport sprzedaży: {date_range}\n" + "```" + summary + "```"
         )
+    if sheets is True:
+        if previous_days == 1:
+            date = datetime.date.today() - datetime.timedelta(days=previous_days)
+            summary_table_simple = get_summary_table_simple(df_sell, RENAME_DICT)
+            append_to_sheets_db(summary_table_simple, date)
 
 
 @flow(flow_run_name="Refresh Apilo Token", log_prints=True)
@@ -175,4 +215,4 @@ def get_apilo_token_secret():
 
 
 if __name__ == "__main__":
-    get_sell_report(3)
+    get_sell_report(1, sheets=True)
