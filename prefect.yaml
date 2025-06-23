@@ -12,17 +12,20 @@ pull:
 deployments:
   - name: "display apilo token"
     entrypoint: flows.py:get_apilo_token_secret
-    version: "0.0.2"
+    version: "0.2.0"
+
+  - name: "refresh apilo token"
+    entrypoint: flows.py:refresh_apilo_token
+    version: "0.2.0"
+    schedules:
+      - interval: 2592000  # 30 days in seconds  
+        timezone: "Europe/Warsaw"
 
   - name: "daily sell reports"
     entrypoint: flows.py:get_sell_report
     version: "0.2.0"
     parameters:
       slack: true
-
-
-    # work_pool:
-    #   name: default-process-pool          # adjust to your pool
 
     schedules:
       - cron: "0 7 * * 1"
