@@ -75,7 +75,23 @@ or
 python flows.py
 ```
 
-To deploy the script, for example on prefect-cloud: 
+## Prefect Deployments
+
+This repository includes a `prefect.yaml` file that defines multiple Prefect deployments for the available flows, including scheduling and parameters.
+
+### Deploying a Flow
+
+To deploy a specific flow using the Prefect CLI, use the `--name` flag with the deployment name defined in `prefect.yaml`. For example, to deploy the daily sell reports flow, run:
+
+```
+uvx prefect deploy --name "daily sell reports"
+```
+
+This command will register the deployment with Prefect, making it available for execution and scheduling according to the configuration in `prefect.yaml`.
+
+For more details, see the [Prefect documentation on deployments](https://docs.prefect.io/latest/concepts/deployments/).
+To deploy the script, using a simpler approach, for example on prefect-cloud:
+
 ```
 uvx prefect-cloud deploy flows.py:get_sell_report
 ```
