@@ -7,7 +7,7 @@ pull:
       branch: main
   - prefect.deployments.steps.run_shell_script:
       directory: "{{ clone-step.directory }}"
-      script: "uv pip sync uv.lock"
+      script: "uv pip compile pyproject.toml | uv pip sync -"
 
 deployments:
   - name: "display apilo token"
