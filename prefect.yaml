@@ -7,11 +7,12 @@ pull:
       branch: main
   - prefect.deployments.steps.run_shell_script:
       directory: "{{ clone-step.directory }}"
-      script: "uv sync"
+      script: "uv pip sync uv.lock"
 
 deployments:
   - name: "display apilo token"
     entrypoint: flows.py:get_apilo_token_secret
+    version: "0.0.2"
 
   - name: "daily sell reports"
     entrypoint: flows.py:get_sell_report
