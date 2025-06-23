@@ -1,0 +1,28 @@
+prefect-version: 3.4.0
+
+pull:
+  - prefect.deployments.steps.git_clone:
+      id: clone-step
+      repository: https://github.com/matplinta/ecommerce-reports-prefect
+      branch: main
+  - prefect.deployments.steps.run_shell_script:
+      directory: "{{ clone-step.directory }}"
+      "script": "uv sync --locked",
+
+deployments:
+  - name: "daily sell reports"
+    entrypoint: flows.py:get_sell_report
+    parameters:
+      slack: true
+
+    version: "0.2.0"
+
+    # work_pool:
+    #   name: default-process-pool          # adjust to your pool
+
+    schedules:
+      - cron: "0 7 * * 1"
+        timezone: "Europe/Warsaw"
+
+      - cron: "0 7 * * *"
+        timezone: "Europe/Warsaw"
