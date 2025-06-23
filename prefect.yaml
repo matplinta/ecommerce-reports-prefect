@@ -7,15 +7,18 @@ pull:
       branch: main
   - prefect.deployments.steps.run_shell_script:
       directory: "{{ clone-step.directory }}"
-      "script": "uv sync --locked",
+      script: "uv sync"
 
 deployments:
+  - name: "display apilo token"
+    entrypoint: flows.py:get_apilo_token_secret
+
   - name: "daily sell reports"
     entrypoint: flows.py:get_sell_report
+    version: "0.2.0"
     parameters:
       slack: true
 
-    version: "0.2.0"
 
     # work_pool:
     #   name: default-process-pool          # adjust to your pool
