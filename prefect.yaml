@@ -10,8 +10,12 @@ pull:
       script: "bash prepare_req.sh"
 
 deployments:
-  - name: "display apilo token"
-    entrypoint: flows.py:get_apilo_token_secret
+  - name: "debug-prefect-version"
+    entrypoint: flows.py:debug_prefect_version
+    version: "0.0.1"
+    
+  - name: "display baselinker token"
+    entrypoint: flows.py:get_baselinker_token_secret
     version: "0.2.0"
 
   - name: "refresh apilo token"

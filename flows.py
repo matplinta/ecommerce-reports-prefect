@@ -212,7 +212,14 @@ def refresh_apilo_token():
 def get_apilo_token_secret():
     logger = get_run_logger()
     logger.info(f"Apilo token: {APILO_TOKEN}")
+    
+
+@flow(flow_run_name="debug-prefect-version", log_prints=True)
+def debug_prefect_version():
+    import prefect, pathlib
+    print("Running Prefect", prefect.__version__, "from", pathlib.Path(prefect.__file__).parent)
+
 
 
 if __name__ == "__main__":
-    get_sell_report(1, sheets=True)
+    debug_prefect_version()
