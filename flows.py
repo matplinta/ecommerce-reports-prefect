@@ -14,7 +14,7 @@ from prefect_slack import SlackCredentials
 from prefect_slack.messages import send_chat_message
 from pydantic import BaseModel
 
-from src.api_exchange_rates import ExchangeRateApi, RapidApiException
+from src.api_exchange_rates import ExchangeRateNbpApi, ExchangeRateRapidApi, ExchangeRateApiException
 from src.api_handlers import ApiloApi, BaselinkerApi
 from src.utils import (
     convert_to_pln,
@@ -41,17 +41,17 @@ RENAME_DICT = Variable.get("rename-dict")
 
 
 @task(retries=10, retry_delay_seconds=5, log_prints=True)
-def get_exchange_rates_all():
+def get_exchange_rates_rapidapi():
     logger = get_run_logger()
-    exchange_rate_api = ExchangeRateApi(api_key=RAPIDAPI_KEY, host=RAPIDAPI_HOST)
+    ex_rate_rapidapi = ExchangeRateRapidApi(api_key=RAPIDAPI_KEY, host=RAPIDAPI_HOST)
     try:
         exchange_rates = {
-            "CZK": exchange_rate_api.convert_currency(1, "CZK", "PLN"),
-            "EUR": exchange_rate_api.convert_currency(1, "EUR", "PLN"),
-            "HUF": exchange_rate_api.convert_currency(1, "HUF", "PLN"),
-            "RON": exchange_rate_api.convert_currency(1, "RON", "PLN"),
+            "CZK": ex_rate_rapidapi.convert_currency(1, "CZK", "PLN"),
+            "EUR": ex_rate_rapidapi.convert_currency(1, "EUR", "PLN"),
+            "HUF": ex_rate_rapidapi.convert_currency(1, "HUF", "PLN"),
+            "RON": ex_rate_rapidapi.convert_currency(1, "RON", "PLN"),
         }
-    except (RapidApiException, Exception) as e:
+    except (ExchangeRateApiException, Exception) as e:
         logger.error(f"Error getting exchange rates: {e}. Using default values.")
         logger.info(e)
         exchange_rates = {
@@ -61,6 +61,11 @@ def get_exchange_rates_all():
             "RON": 0.84,  # 1 RON to PLN
         }
     return exchange_rates
+
+
+@task(retries=10, retry_delay_seconds=5, log_prints=True)
+def get_exchange_rates_nbp():
+    return ExchangeRateNbpApi().get_exchange_rates(to_currencies="CZK,EUR,HUF,RON")
 
 
 @task(log_prints=True)
@@ -150,7 +155,7 @@ class SellReportParams(BaseModel):
 def get_sell_report(previous_days: int=1, slack: bool=False, email: bool=False, sheets: bool=False):
 
     logger = get_run_logger()
-    exchange_rates = get_exchange_rates_all.submit()
+    exchange_rates = get_exchange_rates_nbp.submit()
     df_sell_apilo = gather_apilo_sell_statistics.submit(
         previous_days=previous_days, exchange_rates=exchange_rates
     )
@@ -222,4 +227,4 @@ def debug_prefect_version():
 
 
 if __name__ == "__main__":
-    debug_prefect_version()
+    get_sell_report()
