@@ -31,8 +31,6 @@ Before running the flows, ensure you have properly defined the following Secrets
 | apilo-token          | Your Apilo token                    |
 | apilo-refresh-token  | Your Apilo refresh token            |
 | apilo-url            | The base URL for the Apilo API      |
-| rapidapi-key         | Your RapidAPI key                   |
-| rapidapi-host        | Your RapidAPI host                  |
 
 > ℹ️ **_NOTE:_**  For the first apilo token initializaiton, set `apilo-token` and `apilo-refresh-token` to "-1"
 
@@ -43,6 +41,11 @@ Before running the flows, ensure you have properly defined the following Secrets
 | rename-dict | A dictionary for renaming marketplace keys in the final report |
 
 ### Optional Secrets and Variables
+
+#### RapidAPI
+
+- Secret `rapidapi-key` (optional): Your RapidAPI key  
+- Secret `rapidapi-host` (optional): Your RapidAPI host  
 
 #### Email via Gmail
 
@@ -110,4 +113,4 @@ Gathers sell statistics from Apilo and Baselinker APIs, converts currency values
 Refreshes the Apilo API token and updates the corresponding Prefect Secrets.  
 
 ### **get_apilo_token_secret**  
-Displays the current Apilo token stored in the Prefect Secret.  
+Displays the current Apilo token stored in the Prefect Secret.
