@@ -690,6 +690,9 @@ class BaselinkerApi(ApiHandlerBase):
             order_status = order["order_status_id"]
             if order_status == 196511:  # Anulowane
                 continue
+            
+            if "products" not in order.keys():
+                continue
 
             order_id = order["order_id"]
             source = order["order_source"]
