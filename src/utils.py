@@ -1,5 +1,5 @@
 import datetime
-
+import pycountry
 
 def convert_to_pln(row, exchange_rates):
     if row["currency"] in exchange_rates:
@@ -8,6 +8,18 @@ def convert_to_pln(row, exchange_rates):
             * exchange_rates[row["currency"]]
         )
     return row["total_net_payment_in_default_currency"]
+
+def code_to_country(code: str) -> str | None:
+    if not code:
+        return None
+    code = code.upper()
+    if len(code) == 2:
+        rec = pycountry.countries.get(alpha_2=code)
+    elif len(code) == 3:
+        rec = pycountry.countries.get(alpha_3=code)
+    else:
+        rec = None
+    return rec.name if rec else None
 
 
 def get_summary_string(df_sell, rename_dict):
