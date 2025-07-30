@@ -6,10 +6,13 @@ from datetime import datetime
 class ProductCreate(SQLModel):
     sku: str = Field(nullable=False)
     name: str
+    image_url: str | None
 
 
 class MarketplaceCreate(SQLModel):
     external_id: str
+    platform_origin: str 
+    type: str
     name: str
 
 
@@ -52,3 +55,16 @@ class OrderCreate(SQLModel):
     city: str | None = None
     created_at: datetime
     marketplace_id: int
+
+
+class OfferCreate(SQLModel):
+    external_id: str
+    name: str
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    status_id: int
+    product_id: int
+    marketplace_id: int
+    price_with_tax: Decimal
+    platform_origin: str 
+    type: str

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
 import pandas as pd
 
-from src.domain.entities import Order
+from src.domain.entities import Order, Product, Marketplace
 
 
 class AbstractClient(ABC):
@@ -10,6 +10,11 @@ class AbstractClient(ABC):
         self.timezone = timezone
         self.order_status_ids_to_ignore = order_status_ids_to_ignore or []
         self.marketplace_rename_map = marketplace_rename_map or {}
+        
+    @property
+    @abstractmethod
+    def platform_origin(self) -> str:
+        pass
 
     @staticmethod
     def drop_empty_or_duplicates_sku(df_source):
@@ -113,6 +118,32 @@ class AbstractClient(ABC):
         orders = self.get_orders(date_from=date_from, date_to=date_to, **kwargs)
         simplified_orders = self._to_simplified_orders(orders)
         return self._summarize_orders(simplified_orders, conversion_rates)
+    
+    def _to_domain_marketplaces(self, marketplaces):
+        """Converts marketplaces to a domain format."""
+        domain_marketplaces = []
+        for ext_id, data in marketplaces.items():
+            default_name = f"{data['type']} - {data['name']}"
+            name = self.marketplace_rename_map.get(default_name, default_name)
+            domain_marketplaces.append(
+                Marketplace(
+                    external_id=str(ext_id),
+                    platform_origin=self.platform_origin,
+                    type=data["type"],
+                    name=name
+                )
+            )
+        return domain_marketplaces
+
+    def get_marketplaces_in_domain_format(self) -> list[Marketplace]:
+        """Returns marketplaces in a domain format."""
+        marketplaces = self.get_marketplaces()
+        return self._to_domain_marketplaces(marketplaces)
+
+    def get_products_in_domain_format(self) -> list[dict]:
+        """Returns products in a domain format."""
+        products = self.get_products()
+        return self._to_domain_products(products)
 
     def get_orders_in_domain_format(
         self, previous_days: int = 1, date_range: str = None, exchange_rates=None
@@ -127,13 +158,22 @@ class AbstractClient(ABC):
         return self._to_domain_orders(orders, exchange_rates=exchange_rates)
 
     @abstractmethod
+    def get_order_sources(self): ...
+
+    @abstractmethod
+    def get_orders(self): ...
+
+    @abstractmethod
+    def get_marketplaces(self): ...
+    
+    @abstractmethod
+    def get_products(self): ...
+    
+    @abstractmethod
     def _to_simplified_orders(self): ...
     
     @abstractmethod
     def _to_domain_orders(self): ...
     
     @abstractmethod
-    def get_order_sources(self): ...
-
-    @abstractmethod
-    def get_orders(self): ...
+    def _to_domain_products(self): ...

@@ -1,9 +1,11 @@
 from sqlmodel import Session, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import and_
 from decimal import Decimal
 from datetime import datetime
 
 from src.db.models import (
+    Offer,
     Order,
     OrderItem,
     Product,
@@ -13,6 +15,7 @@ from src.db.models import (
     ProductMarketplaceLink,
 )
 from src.db.dto import (
+    OfferCreate,
     OrderCreate,
     OrderItemCreate,
     PriceHistoryCreate,
@@ -21,7 +24,7 @@ from src.db.dto import (
     ProductMarketplaceLinkCreate,
     StockHistoryCreate,
 )
-from src.domain.entities import Order as OrderDomain
+from src.domain.entities import Order as OrderDomain, Offer as OfferDomain, Product as ProductDomain, Marketplace as MarketplaceDomain
 
 
 def get_or_create(session, model, defaults=None, **kwargs):
@@ -85,6 +88,20 @@ def get_or_create_product(session: Session, product_create: ProductCreate) -> Pr
         return prod
     return create_product(session=session, product_create=product_create)
 
+# from sqlalchemy.dialects.postgresql import insert
+
+def upsert_product(session: Session, product_domain: ProductDomain) -> Product:
+    stmt = insert(Product).values(**product_domain.model_dump(exclude_unset=True))
+    stmt = stmt.on_conflict_do_update(
+        index_elements=['sku'],
+        set_={
+            "name": product_domain.name,
+            "image_url": product_domain.image_url
+        }
+    )
+    session.exec(stmt)
+    return session.exec(select(Product).where(Product.sku == product_domain.sku)).first()
+
 
 # --- Marketplace CRUD ---
 
@@ -125,14 +142,32 @@ def get_or_create_marketplace(
     mp = session.exec(
         select(Marketplace).where(
             and_(
-                Marketplace.name == marketplace_create.name,
                 Marketplace.external_id == marketplace_create.external_id,
+                Marketplace.platform_origin == marketplace_create.platform_origin,
+                Marketplace.type == marketplace_create.type,
             )
         )
     ).first()
     if mp:
         return mp
     return create_marketplace(session=session, marketplace_create=marketplace_create)
+
+def upsert_marketplace(session: Session, marketplace_domain: MarketplaceDomain) -> Marketplace:
+    stmt = insert(Marketplace).values(**marketplace_domain.model_dump(exclude_unset=True))
+    stmt = stmt.on_conflict_do_update(
+        index_elements=['external_id', 'platform_origin', 'type'],
+        set_={
+            "name": marketplace_domain.name
+        }
+    )
+    session.exec(stmt)
+    return session.exec(
+        select(Marketplace).where(
+            Marketplace.external_id == marketplace_domain.external_id,
+            Marketplace.platform_origin == marketplace_domain.platform_origin,
+            Marketplace.type == marketplace_domain.type,
+        )
+    ).first()
 
 
 # --- ProductMarketplaceLink CRUD ---
@@ -210,7 +245,7 @@ def create_order(*, session: Session, order_create: OrderCreate) -> Order:
     return db_obj
 
 
-def get_or_create_order(*, session: Session, order_domain: OrderDomain) -> tuple[Order, bool]:
+def get_or_create_order_with_dependencies(*, session: Session, order_domain: OrderDomain) -> tuple[Order, bool]:
     """
     Create a single Order from domain schema, or return existing one.
     Returns (order, created: bool)
@@ -220,6 +255,8 @@ def get_or_create_order(*, session: Session, order_domain: OrderDomain) -> tuple
         MarketplaceCreate(
             external_id=order_domain.marketplace_extid,
             name=order_domain.marketplace_name,
+            platform_origin=order_domain.platform_origin,
+            type=order_domain.marketplace_type,
         )
     )
     existing = order_exists(session, order_domain.external_id, mp.id)
@@ -260,16 +297,213 @@ def get_or_create_order(*, session: Session, order_domain: OrderDomain) -> tuple
                 quantity=it.quantity,
             ),
         )
-        create_price_history(
-            session=session,
-            price_history_create=PriceHistoryCreate(
-                product_id=prod.id,
-                marketplace_id=mp.id,
-                date=order.created_at,
-                price_pln=Decimal(order_item.price_pln),
-            ),
-        )
 
+    return order, True
+
+def get_or_create_order_with_dependencies_efficient(
+    *, session: Session, order_domain: OrderDomain
+) -> tuple[Order, bool]:
+    """
+    Efficiently create a single Order from domain schema, or return existing one.
+    """
+    # 1. Marketplace
+    mp = session.exec(
+        select(Marketplace).where(
+            Marketplace.external_id == order_domain.marketplace_extid,
+            Marketplace.name == order_domain.marketplace_name,
+            Marketplace.type == order_domain.marketplace_type,
+            Marketplace.platform_origin == order_domain.platform_origin,
+        )
+    ).first()
+    if not mp:
+        mp = Marketplace(
+            external_id=order_domain.marketplace_extid,
+            name=order_domain.marketplace_name,
+            type=order_domain.marketplace_type,
+            platform_origin=order_domain.platform_origin,
+        )
+        session.add(mp)
+        session.flush()  # assign id without commit
+
+    # 2. Order exists?
+    existing_order = session.exec(
+        select(Order).where(
+            Order.external_id == order_domain.external_id,
+            Order.marketplace_id == mp.id,
+        )
+    ).first()
+    if existing_order:
+        return existing_order, False
+
+    # 3. Products: batch get/create
+    skus = [it.sku for it in order_domain.items]
+    existing_products = {
+        p.sku: p for p in session.exec(select(Product).where(Product.sku.in_(skus))).all()
+    }
+    new_products = []
+    for it in order_domain.items:
+        if it.sku not in existing_products:
+            prod = Product(sku=it.sku, name=it.name)
+            session.add(prod)
+            new_products.append(prod)
+    session.flush()  # assign ids to new products
+
+    # Refresh product dict with new products
+    for prod in new_products:
+        existing_products[prod.sku] = prod
+
+    # 4. Order
+    order = Order(
+        external_id=order_domain.external_id,
+        created_at=order_domain.created_at,
+        total_gross_original=Decimal(order_domain.total_gross_original),
+        total_gross_pln=Decimal(order_domain.total_gross_pln),
+        delivery_cost_original=Decimal(order_domain.delivery_cost_original),
+        delivery_cost_pln=Decimal(order_domain.delivery_cost_pln),
+        delivery_method=order_domain.delivery_method,
+        currency=order_domain.currency,
+        status=order_domain.status,
+        country=order_domain.country,
+        city=order_domain.city,
+        marketplace_id=mp.id,
+    )
+    session.add(order)
+    session.flush()  # assign id
+
+    # 5. ProductMarketplaceLinks: batch get/create
+    existing_links = {
+        (link.product_id, link.marketplace_id)
+        for link in session.exec(
+            select(ProductMarketplaceLink).where(
+                ProductMarketplaceLink.product_id.in_([p.id for p in existing_products.values()]),
+                ProductMarketplaceLink.marketplace_id == mp.id,
+            )
+        ).all()
+    }
+    for prod in existing_products.values():
+        key = (prod.id, mp.id)
+        if key not in existing_links:
+            session.add(ProductMarketplaceLink(product_id=prod.id, marketplace_id=mp.id))
+
+    # 6. OrderItems: batch add
+    for it in order_domain.items:
+        prod = existing_products[it.sku]
+        order_item = OrderItem(
+            order_id=order.id,
+            product_id=prod.id,
+            price=Decimal(it.price),
+            price_pln=Decimal(it.price_pln),
+            quantity=it.quantity,
+        )
+        session.add(order_item)
+
+    session.commit()
+    session.refresh(order)
+    return order, True
+
+
+def upsert_product_old(session, sku, name):
+    stmt = insert(Product).values(sku=sku, name=name)
+    stmt = stmt.on_conflict_do_nothing(index_elements=['sku'])
+    session.execute(stmt)
+    # Fetch the product (either just inserted or already existing)
+    return session.exec(select(Product).where(Product.sku == sku)).first()
+
+def upsert_marketplace_old(session, external_id, name, platform_origin, type):
+    stmt = insert(Marketplace).values(external_id=external_id, name=name, platform_origin=platform_origin, type=type)
+    stmt = stmt.on_conflict_do_nothing(index_elements=['external_id', 'platform_origin', 'type'])
+    session.execute(stmt)
+    return session.exec(
+        select(Marketplace).where(
+            Marketplace.external_id == external_id,
+            Marketplace.name == name,
+            Marketplace.platform_origin == platform_origin,
+            Marketplace.type == type,
+        )
+    ).first()
+    
+def upsert_product_marketplace_link(session, product_id, marketplace_id):
+    stmt = insert(ProductMarketplaceLink).values(product_id=product_id, marketplace_id=marketplace_id)
+    stmt = stmt.on_conflict_do_nothing(index_elements=['product_id', 'marketplace_id'])
+    session.execute(stmt)
+    # Optionally fetch the link (either just inserted or already existing)
+    return session.exec(
+        select(ProductMarketplaceLink).where(
+            ProductMarketplaceLink.product_id == product_id,
+            ProductMarketplaceLink.marketplace_id == marketplace_id,
+        )
+    ).first()
+
+def get_or_create_order_with_dependencies_parallel(*, session: Session, order_domain: OrderDomain
+) -> tuple[Order, bool]:
+    """
+    Efficiently create a single Order from domain schema, or return existing one.
+    Returns (order, created: bool)
+    """
+    # 1. Marketplace (upsert)
+    mp = upsert_marketplace_old(
+        session,
+        external_id=order_domain.marketplace_extid,
+        name=order_domain.marketplace_name,
+        platform_origin=order_domain.platform_origin,
+        type=order_domain.marketplace_type,
+    )
+
+    # 2. Order exists?
+    existing_order = session.exec(
+        select(Order).where(
+            Order.external_id == order_domain.external_id,
+            Order.marketplace_id == mp.id,
+        )
+    ).first()
+    if existing_order:
+        return existing_order, False
+
+    # 3. Products: batch upsert
+    skus = [it.sku for it in order_domain.items]
+    existing_products = {
+        p.sku: p for p in session.exec(select(Product).where(Product.sku.in_(skus))).all()
+    }
+    for it in order_domain.items:
+        if it.sku not in existing_products:
+            prod = upsert_product_old(session, it.sku, it.name)
+            existing_products[it.sku] = prod
+
+    # 4. Order
+    order = Order(
+        external_id=order_domain.external_id,
+        created_at=order_domain.created_at,
+        total_gross_original=Decimal(order_domain.total_gross_original),
+        total_gross_pln=Decimal(order_domain.total_gross_pln),
+        delivery_cost_original=Decimal(order_domain.delivery_cost_original),
+        delivery_cost_pln=Decimal(order_domain.delivery_cost_pln),
+        delivery_method=order_domain.delivery_method,
+        currency=order_domain.currency,
+        status=order_domain.status,
+        country=order_domain.country,
+        city=order_domain.city,
+        marketplace_id=mp.id,
+    )
+    session.add(order)
+    session.flush()  # assign id
+
+    for prod in existing_products.values():
+        upsert_product_marketplace_link(session, prod.id, mp.id)
+
+    # 6. OrderItems and PriceHistory: batch add
+    for it in order_domain.items:
+        prod = existing_products[it.sku]
+        order_item = OrderItem(
+            order_id=order.id,
+            product_id=prod.id,
+            price=Decimal(it.price),
+            price_pln=Decimal(it.price_pln),
+            quantity=it.quantity,
+        )
+        session.add(order_item)
+
+    session.commit()
+    session.refresh(order)
     return order, True
 
 def order_exists(session: Session, external_id: str, marketplace_id: int) -> bool:
@@ -398,3 +632,94 @@ def delete_stock_history(session: Session, stock_history_id: int) -> None:
     if obj:
         session.delete(obj)
         session.commit()
+
+def get_or_create_offer_efficient_upsert(
+    *, session: Session, offer_domain: OfferDomain
+) -> tuple[Offer, bool]:
+    """
+    Efficiently create a single Offer from domain schema, or update if it exists.
+    Returns (offer, created: bool)
+    """
+    # 1. Marketplace (upsert)
+    mp = upsert_marketplace_old(
+        session,
+        external_id=offer_domain.marketplace_extid,
+        name="Marketplace",  # Offer domain doesn't include marketplace name, use a placeholder or fetch it
+        platform_origin=offer_domain.platform_origin,
+        type=offer_domain.type,
+    )
+    
+    # 2. Product (upsert)
+    prod = upsert_product_old(session, offer_domain.sku, offer_domain.name)
+    
+    # 3. Ensure product-marketplace link
+    upsert_product_marketplace_link(session, prod.id, mp.id)
+    
+    # 4. Check if offer exists
+    existing_offer = session.exec(
+        select(Offer).where(
+            Offer.external_id == offer_domain.external_id,
+            Offer.marketplace_id == mp.id,
+        )
+    ).first()
+    
+    if existing_offer:
+        # Update fields that might have changed
+        existing_offer.name = offer_domain.name
+        existing_offer.started_at = offer_domain.started_at
+        existing_offer.ended_at = offer_domain.ended_at
+        existing_offer.quantity_selling = offer_domain.quantity_selling
+        existing_offer.price_with_tax = Decimal(offer_domain.price_with_tax)
+        existing_offer.status_id = offer_domain.status_id
+        existing_offer.product_id = prod.id  # Ensure correct product relation
+        
+        # Add stock history record for the update
+        stock_history = StockHistory(
+            product_id=prod.id,
+            marketplace_id=mp.id,
+            date=datetime.now(),
+            quantity=offer_domain.quantity_selling,
+        )
+        session.add(stock_history)
+        
+        session.commit()
+        session.refresh(existing_offer)
+        return existing_offer, False
+    
+    # 5. Create new offer
+    new_offer = Offer(
+        external_id=offer_domain.external_id,
+        name=offer_domain.name,
+        started_at=offer_domain.started_at,
+        ended_at=offer_domain.ended_at,
+        quantity_selling=offer_domain.quantity_selling,
+        sku=offer_domain.sku,
+        ean=offer_domain.ean,
+        price_with_tax=Decimal(offer_domain.price_with_tax),
+        status_id=offer_domain.status_id,
+        marketplace_id=mp.id,
+        product_id=prod.id,
+    )
+    session.add(new_offer)
+    
+    # 6. Add stock history entry for the new offer
+    stock_history = StockHistory(
+        product_id=prod.id,
+        marketplace_id=mp.id,
+        date=datetime.now(),
+        quantity=offer_domain.quantity_selling,
+    )
+    session.add(stock_history)
+    
+    # 7. Add price history entry
+    price_history = PriceHistory(
+        product_id=prod.id,
+        marketplace_id=mp.id,
+        date=datetime.now(),
+        price_pln=Decimal(offer_domain.price_with_tax),  # Assuming price_with_tax is in PLN
+    )
+    session.add(price_history)
+    
+    session.commit()
+    session.refresh(new_offer)
+    return new_offer, True

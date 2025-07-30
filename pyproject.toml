@@ -16,3 +16,9 @@ dependencies = [
     "requests>=2.32.3",
     "sqlmodel[asyncio]>=0.0.24",
 ]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.30.0",
+    "ipython>=8.37.0",
+]

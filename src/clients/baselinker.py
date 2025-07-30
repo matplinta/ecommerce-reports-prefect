@@ -7,7 +7,7 @@ import pytz
 
 
 from .abstract_client import AbstractClient
-from src.domain.entities import Order, OrderItem
+from src.domain.entities import Order, OrderItem, Product, Marketplace
 from src.utils import code_to_country
 
 
@@ -17,6 +17,10 @@ class BaselinkerClient(AbstractClient):
     def __init__(self, token, timezone=pytz.timezone("Europe/Warsaw"), order_status_ids_to_ignore=None, marketplace_rename_map=None) -> None:
         super().__init__(timezone, order_status_ids_to_ignore, marketplace_rename_map)
         self.token = token
+        
+    @property
+    def platform_origin(self) -> str:
+        return "Baselinker"
 
     def _make_request(self, method, parameters=None) -> requests.Response:
         if parameters is None:
@@ -56,8 +60,8 @@ class BaselinkerClient(AbstractClient):
         response = self._make_request(method="getOrderSources")
         return dict(response["sources"])
     
-    def get_order_sources_by_id(self):
-        """Returns a dictionary of order sources by ID.
+    def get_marketplaces(self):
+        """Returns a dictionary of marketplaces (order sources) by ID.
         Example data:
         {
             "123123": {"name": "plus.cz", "type": "Allegro"},
@@ -222,10 +226,41 @@ class BaselinkerClient(AbstractClient):
         return prods_detailed
 
     def get_inventories(self):
+        """Returns: 
+        [
+            {'inventory_id': 26286,
+            'name': 'Domyślny',
+            'description': '',
+            'languages': ['cs'],
+            'default_language': 'cs',
+            'price_groups': [23841],
+            'default_price_group': 23841,
+            'warehouses': ['bl_33833', 'bl_60498', 'bl_70162'],
+            'default_warehouse': 'bl_33833',
+            'reservations': False,
+            'is_default': True}
+        ]
+        """
         return self._make_request(method="getInventories")["inventories"]
 
     def get_inventory_warehouses(self):
         return self._make_request(method="getInventoryWarehouses")["warehouses"]
+    
+    def get_products(self, inventory: int=None) -> list[dict]:
+        """If no inventory is provided, it will use the default inventory.
+        """
+        def get_default_inventory_id(inventories):
+            for inv in inventories:
+                if inv.get("is_default"):
+                    return inv.get("inventory_id")
+            return None
+        
+        inventories = self.get_inventories()
+        if inventory is None:
+            inventory_id = get_default_inventory_id(inventories)
+        products = self.get_inventory_products_list(inventory_id=inventory_id)
+        products = self.get_inventory_products_data(inventory_id=inventory_id, products=list(products.keys()))
+        return products
 
 
     @staticmethod
@@ -403,7 +438,34 @@ class BaselinkerClient(AbstractClient):
                     created_at=created_at,
                     marketplace_extid=str(source_id),
                     marketplace_name=source_custom_name,
+                    platform_origin="Baselinker",
+                    marketplace_type=source_type,
                     items=order_items,
                 )
             )
         return domain_orders
+
+    def _to_domain_products(self, products) -> dict:
+        """Converts products to a domain format for easier processing.
+        Format is a list of Product objects.
+        """
+        domain_products = {}
+        for product_id, data in products.items():
+            if not data["sku"]:
+                continue
+            if "images" in data and isinstance(data["images"], dict):
+                image = None
+                for i in range(1, len(data["images"]) + 1):
+                    key = str(i)
+                    if key in data["images"]:
+                        image = data["images"][key]
+                        break
+            else:
+                image = None
+
+            domain_products[data["sku"]] = Product(
+                sku=data["sku"],
+                name=data["text_fields"].get("name", ""),
+                image_url=image
+            )
+        return domain_products

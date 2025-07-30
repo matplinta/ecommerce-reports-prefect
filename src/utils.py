@@ -120,3 +120,16 @@ def generate_html_email(summary_table):
 
 def get_date_range(previous_days):
     return f"{(datetime.date.today() - datetime.timedelta(days=previous_days)).strftime('%d.%m.%Y')}-{(datetime.date.today() - datetime.timedelta(days=1)).strftime('%d.%m.%Y')}"
+
+def chunked_by_chunk_size(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+def chunked_by_num_chunks(lst, num_chunks):
+    """Yield num_chunks chunks from lst, as evenly sized as possible."""
+    k, m = divmod(len(lst), num_chunks)
+    for i in range(num_chunks):
+        start = i * k + min(i, m)
+        end = (i + 1) * k + min(i + 1, m)
+        yield lst[start:end]

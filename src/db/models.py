@@ -14,10 +14,12 @@ class ProductMarketplaceLink(SQLModel, table=True):
     product_id: int = Field(
         foreign_key="product.id",
         primary_key=True,
+        ondelete="CASCADE"
     )
     marketplace_id: int = Field(
         foreign_key="marketplace.id",
         primary_key=True,
+        ondelete="CASCADE"
     )
 
 # ────────────────────────────────────────────
@@ -25,16 +27,21 @@ class ProductMarketplaceLink(SQLModel, table=True):
 # ────────────────────────────────────────────
 class Offer(SQLModel, table=True):
     __tablename__ = "offer"
+    __table_args__ = (UniqueConstraint("external_id", "marketplace_id"),)
 
     id: int | None = Field(default=None, primary_key=True)
+    external_id: str = Field(index=True)  # upstream identifier (listing ID)
+    name: str = Field(max_length=255, nullable=False)
+    started_at: datetime = Field(index=True, nullable=False)
+    ended_at: datetime | None = None
+    quantity_selling: int = Field(default=0, nullable=False)
+    
+    ean: str | None = Field(max_length=13, nullable=True)
     product_id: int = Field(foreign_key="product.id", index=True)
-    marketplace_id: int = Field(foreign_key="marketplace.id", index=True)
+    marketplace_id: int = Field(foreign_key="marketplace.id", index=True, ondelete="CASCADE")
 
-    offer_id: str = Field(index=True)  # upstream identifier (listing ID)
-    url: str | None = None
-    created_at: datetime | None = None
     status: str = Field(max_length=100, default="active")
-    price: Decimal = Field(default=0, max_digits=10, decimal_places=2, nullable=False)
+    price_with_tax: Decimal = Field(default=0, max_digits=10, decimal_places=2, nullable=False)
 
     # relationships (optional)
     product: "Product" = Relationship(back_populates="offers")
@@ -43,10 +50,13 @@ class Offer(SQLModel, table=True):
 
 class Marketplace(SQLModel, table=True):
     __tablename__ = "marketplace"
+    __table_args__ = (UniqueConstraint("external_id", "type", "platform_origin"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    external_id: str | None = Field(default=None)
-    name: str = Field(index=True, unique=True)
+    external_id: str = Field(default=None)
+    platform_origin: str | None = Field(default=None, description="The origin of the marketplace e.g. 'Baselinker'")
+    type: str | None = Field(default=None, description="Type of the marketplace platform (e.g., 'allegro', 'amazon')")
+    name: str = Field(index=True)
 
     # back‑relationships
     products: list["Product"] = Relationship(
@@ -63,6 +73,7 @@ class Product(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     sku: str = Field(index=True, unique=True)
     name: str = Field(max_length=255)
+    image_url: str | None = Field(default=None, description="URL to the product image")
 
     marketplaces: list[Marketplace] = Relationship(
         back_populates="products",
@@ -104,7 +115,7 @@ class Order(SQLModel, table=True):
     city: str | None = Field(max_length=100)
 
     # FK → Marketplace
-    marketplace_id: int = Field(foreign_key="marketplace.id")
+    marketplace_id: int = Field(foreign_key="marketplace.id", ondelete="CASCADE")
     marketplace: Marketplace = Relationship(back_populates="orders")
 
     # One‑to‑many order → items
@@ -116,7 +127,7 @@ class OrderItem(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
 
-    order_id: int = Field(foreign_key="order.id")
+    order_id: int = Field(foreign_key="order.id", ondelete="CASCADE")
     product_id: int = Field(foreign_key="product.id")
 
     price: Decimal = Field(default=0, max_digits=10, decimal_places=2, nullable=False, description="Gross price per item at the time of order")
@@ -137,8 +148,8 @@ class PriceHistory(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
 
-    product_id: int = Field(foreign_key="product.id")
-    marketplace_id: int = Field(foreign_key="marketplace.id")
+    product_id: int = Field(foreign_key="product.id", ondelete="CASCADE")
+    marketplace_id: int = Field(foreign_key="marketplace.id", ondelete="CASCADE")
     date: datetime = Field(index=True)
     price_pln: Decimal = Field(default=0, max_digits=10, decimal_places=2, nullable=False)
 
@@ -151,7 +162,7 @@ class StockHistory(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("product_id", "date"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    product_id: int = Field(foreign_key="product.id")
+    product_id: int = Field(foreign_key="product.id", ondelete="CASCADE")
     date: datetime = Field(index=True)
     stock: int
 

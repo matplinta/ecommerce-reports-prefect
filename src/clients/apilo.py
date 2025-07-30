@@ -6,7 +6,7 @@ import pytz
 import requests
 
 from .abstract_client import AbstractClient
-from src.domain.entities import Order, OrderItem
+from src.domain.entities import Order, OrderItem, Product, Marketplace
 from src.utils import code_to_country
 
 
@@ -34,6 +34,10 @@ class ApiloClient(AbstractClient):
         )
         if token is None or str(token) == "-1":
             self.obtain_access_token()
+            
+    @property
+    def platform_origin(self) -> str:
+        return "Apilo"
             
     @staticmethod
     def format_datetime_iso8601(dt: datetime):
@@ -105,7 +109,154 @@ class ApiloClient(AbstractClient):
             raise self.APIRequestError(
                 response.status_code, response.text, "HTTP request failed"
             )
-
+            
+    def _fetch_paginated(self, path: str, limit: int = 512, response_key: str = None, **additional_params):
+        """
+        Fetch all pages of results from an API endpoint that supports offset/limit pagination.
+        
+        Args:
+            path: API subpath (e.g., "sale/auction")
+            limit: Number of items per page
+            response_key: Key in the response that contains the items list
+                        (if None, assumes the entire response is the list)
+            **additional_params: Any additional query parameters to include
+        
+        Returns:
+            List of all items across all pages
+        """
+        query_params = {"limit": limit, **additional_params}
+        all_items = []
+        offset = 0
+        
+        while True:
+            query_params["offset"] = offset
+            response = self._make_request(path=path, query_params=query_params)
+            
+            # Extract items based on whether response_key is provided
+            if response_key:
+                items = response.get(response_key, [])
+            else:
+                items = response if isinstance(response, list) else []
+            
+            if len(items) == 0:
+                break
+                
+            all_items.extend(items)
+            offset += len(items)
+            
+        return all_items
+            
+    def get_offers(self):
+        """Returns:
+        [
+            {'id': 48,
+            'idExternal': '13673',
+            'name': 'SZKŁO DO SAMSUNG GALAXY TAB',
+            'status': 89,
+            'startedAt': '2023-02-01T13:36:26+0100',
+            'endedAt': None,
+            'preferences': {'invoiceType': 'vatInvoice',
+            'dispatchTime': {'unit': 'day', 'period': 1}},
+            'platformAccount': {'id': 7, 'login': 'kontakt@gmail.com'},
+            'auctionProducts': [{'id': 48,
+                'sku': '516',
+                'ean': '59038',
+                'quantitySelling': 97853,
+                'handlingTime': None,
+                'priceWithTax': '22.99',
+                'isWarehouseCheck': 0,
+                'product': {'id': 861, 'sku': '516'}}
+                ]
+            },
+            ...
+        ]
+        """
+        return self._fetch_paginated(path="sale/auction", limit=512, response_key="auctions")
+    
+    def get_products(self):
+        """Returns:
+        [
+            {'id': 1234,
+            'sku': '7240',
+            'ean': '11111111262',
+            'name': 'RADIO SAMSUNG',
+            'unit': None,
+            'weight': None,
+            'quantity': 9999,
+            'priceWithTax': '1590.00',
+            'priceWithoutTax': '1292.68',
+            'tax': '23.00',
+            'originalCode': None,
+            'status': 1},
+            ...
+        ]
+        """
+        return self._fetch_paginated(path="warehouse/product", limit=2000, response_key="products")
+    
+    def get_products_media(self, only_main: bool = True):
+        """Returns:
+        [
+            {'id': 42,
+            'isMain': 1,
+            'productId': 1,
+            'uuid': '4d8f05ee-1111-468a-ae90-581825e1c5aa',
+            'extension': 'jpeg',
+            'link': 'https://xxxxxxxxxx.googleapis.com/xxxx/4d8f05ee-1111-468a-ae90-581825e1c5aa.jpeg'},
+            ...
+        ]
+        """
+        only_main = 1 if only_main else 0
+        return self._fetch_paginated(path="warehouse/product/media", limit=512, response_key="media", onlyMain=only_main)
+    
+    def get_products_with_media(self):
+        """
+        Returns a list of products with their main media information.
+        
+        Returns:
+            List of dictionaries with the following keys:
+            - sku: Product SKU
+            - product_id: Internal product ID
+            - name: Product name
+            - uuid: Media UUID (if available)
+            - link: Media link URL (if available)
+            - priceWithTax: Product price including tax
+            e.g.
+            {'sku': '7517',
+            'product_id': 123,
+            'name': 'RADIO LTE',
+            'uuid': 'c8ad2978-xxxx-48e5-ba9a-2ef250ee3869',
+            'link': 'https://prod.storage.googleapis.com/xxxx/c8ad2978-xxxx-48e5-ba9a-2ef250ee3869.jpeg',
+            'priceWithTax': '1590.00'},
+        """
+        # Get all products
+        products = self.get_products()
+        
+        # Get all main product images
+        media_items = self.get_products_media(only_main=True)
+        
+        # Create a dictionary of media indexed by product ID for quick lookup
+        media_by_product_id = {}
+        for media in media_items:
+            if media["isMain"] == 1:  # Only use main images
+                media_by_product_id[media["productId"]] = media
+        
+        # Combine product data with media data
+        result = []
+        for product in products:
+            product_id = product["id"]
+            media = media_by_product_id.get(product_id, {})
+            
+            result.append({
+                "sku": product["sku"],
+                "product_id": product_id,
+                "name": product["name"],
+                "uuid": media.get("uuid"),
+                "link": media.get("link"),
+                "priceWithTax": product["priceWithTax"]
+            })
+        
+        return result
+    
     def get_order_status_types(self):
         """Returns a dictionary of order status types. Consists of status ID as key and status name as value."""
         response = self._make_request(path="orders/status/map")
@@ -148,8 +299,8 @@ class ApiloClient(AbstractClient):
         response = self._make_request(path="sale")
         return response
         
-    def get_order_sources_by_id(self):
-        """Returns a dictionary of order sources by ID.
+    def get_marketplaces(self):
+        """Returns a dictionary of marketplaces (order sources) by ID.
         Example data:
         {
             "123123": {"name": "plus.cz", "type": "Allegro"},
@@ -161,7 +312,7 @@ class ApiloClient(AbstractClient):
         sources = self.get_order_sources()
         return {
             market["id"]: {"name": market["name"], "type": market["description"].lower()}
-            for market in sources.get("platforms", [])
+            for market in sources.get("platforms", []) if market["description"].lower() != "manualaccount"
         }
 
     def get_orders(self, date_from: datetime, date_to: datetime = None, limit=512):
@@ -220,26 +371,19 @@ class ApiloClient(AbstractClient):
         'status': 21},
         """
         date_from = self.__class__.format_datetime_iso8601(date_from)
-        date_to = self.__class__.format_datetime_iso8601(date_to)
         
-        query_params = {"createdAfter": date_from, "limit": limit}
+        query_params = {"createdAfter": date_from}
         if date_to is not None:
+            date_to = self.__class__.format_datetime_iso8601(date_to)
             query_params["createdBefore"] = date_to
 
-        all_orders = []
-        offset = 0
+        return self._fetch_paginated(
+            path="orders",
+            limit=limit,
+            response_key="orders",
+            **query_params
+        )
 
-        while True:
-            query_params["offset"] = offset
-            response = self._make_request(path="orders", query_params=query_params)
-
-            if (len_orders := len(response.get("orders", []))) == 0:
-                break
-
-            all_orders.extend(response["orders"])
-            offset += len_orders
-
-        return all_orders
     
     @staticmethod
     def _get_delivery_item(order_items):
@@ -345,7 +489,7 @@ class ApiloClient(AbstractClient):
                     price_pln=convert_to_pln(float(item["originalPriceWithTax"]), currency),
                     quantity=int(item["quantity"]),
                 )
-                for item in order["orderItems"] if item["type"] != 2  # Exclude delivery items
+                for item in order["orderItems"] if item["type"] != 2 and item["sku"] is not None  # Exclude delivery items
             ]
             
             domain_orders.append(
@@ -363,9 +507,39 @@ class ApiloClient(AbstractClient):
                     created_at=created_at,
                     marketplace_extid=str(source_id),
                     marketplace_name=source_custom_name,
+                    platform_origin="Apilo",
+                    marketplace_type=source_type,
                     items=order_items,
                 )
             )
         return domain_orders
 
 
+    def _to_domain_products(self, products) -> dict:
+        """Converts products to a domain format for easier processing.
+        Format is a list of Product objects.
+        """
+        # Get all main product images
+        media_items = self.get_products_media(only_main=True)
+        
+        # Create a dictionary of media indexed by product ID for quick lookup
+        media_by_product_id = {}
+        for media in media_items:
+            if media["isMain"] == 1:  # Only use main images
+                media_by_product_id[media["productId"]] = media
+        
+        # Combine product data with media data
+        domain_products = {}
+        for product in products:
+            if not product["sku"]:
+                continue
+            
+            product_id = product["id"]
+            image_url = media_by_product_id.get(product_id, {})
+
+            domain_products[product["sku"]] = Product(
+                sku=product["sku"],
+                name=product["name"],
+                image_url=image_url.get("link") if image_url else None,
+            )
+        return domain_products
