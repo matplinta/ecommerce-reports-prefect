@@ -1,4 +1,6 @@
 import datetime
+import json
+import tempfile
 
 import pytz
 from prefect import flow, get_run_logger, task
@@ -19,18 +21,25 @@ from src.clients.exchange_rates import (
     ExchangeRateNbpApi,
     ExchangeRateRapidApi,
 )
-from src.db.crud import upsert_product, upsert_marketplace, get_or_create_order_with_dependencies_efficient, get_or_create_order_with_dependencies_parallel
+from src.db.crud import (
+    create_stock_history_with_upsert_product,
+    get_or_create_offer_with_dependencies_efficient,
+    get_or_create_order_with_dependencies_efficient,
+    get_or_create_order_with_dependencies_parallel,
+    upsert_marketplace,
+    upsert_product,
+)
 from src.db.engine import engine
 from src.utils import (
-    convert_to_pln,
+    chunked_by_chunk_size,
+    chunked_by_num_chunks,
+    convert_to_pln_row,
     generate_html_email,
     generate_markdown_table,
     get_date_range,
     get_summary_string,
     get_summary_table,
     get_summary_table_simple,
-    chunked_by_chunk_size,
-    chunked_by_num_chunks,
 )
 
 
@@ -57,16 +66,18 @@ def get_apilo_client() -> ApiloClient:
         order_status_ids_to_ignore=APILO_ORDER_STATUS_IDS_TO_IGNORE,
         marketplace_rename_map=MARKETPLACE_RENAME_MAP,
     )
-    
+
+
 def update_apilo_secrets(apilo_client: ApiloClient):
     Secret(value=apilo_client.token).save("apilo-token", overwrite=True)
-    Secret(value=apilo_client.refresh_token).save(
-        "apilo-refresh-token", overwrite=True
-    )
+    Secret(value=apilo_client.refresh_token).save("apilo-refresh-token", overwrite=True)
+
 
 def get_baselinker_client() -> BaselinkerClient:
     BASELINKER_TOKEN = Secret.load("baselinker-token").get()
-    BASELINKER_ORDER_STATUS_IDS_TO_IGNORE = Variable.get("baselinker-order-status-ids-to-ignore")
+    BASELINKER_ORDER_STATUS_IDS_TO_IGNORE = Variable.get(
+        "baselinker-order-status-ids-to-ignore"
+    )
     MARKETPLACE_RENAME_MAP = Variable.get("marketplace-rename-map", default={})
     TIMEZONE_PYTZ_STR = Variable.get("timezone-pytz-str", default="Europe/Warsaw")
     TIMEZONE = pytz.timezone(TIMEZONE_PYTZ_STR)
@@ -77,6 +88,7 @@ def get_baselinker_client() -> BaselinkerClient:
         order_status_ids_to_ignore=BASELINKER_ORDER_STATUS_IDS_TO_IGNORE,
         marketplace_rename_map=MARKETPLACE_RENAME_MAP,
     )
+
 
 @task(retries=10, retry_delay_seconds=5, log_prints=True)
 def get_exchange_rates_rapidapi():
@@ -117,6 +129,7 @@ def fetch_apilo_sell_statistics(previous_days=1, exchange_rates=None):
     update_apilo_secrets(apilo_client)
     return df_sell
 
+
 @task(log_prints=True)
 def fetch_apilo_orders(previous_days=1, exchange_rates=None):
     apilo_client = get_apilo_client()
@@ -126,12 +139,14 @@ def fetch_apilo_orders(previous_days=1, exchange_rates=None):
     update_apilo_secrets(apilo_client)
     return orders
 
+
 @task(log_prints=True)
 def fetch_apilo_products():
     apilo_client = get_apilo_client()
     products = apilo_client.get_products_in_domain_format()
     update_apilo_secrets(apilo_client)
     return products
+
 
 @task(log_prints=True)
 def fetch_apilo_marketplaces():
@@ -149,6 +164,7 @@ def fetch_baselinker_sell_statistics(previous_days=1, exchange_rates=None):
     )
     return df_sell
 
+
 @task(log_prints=True)
 def fetch_baselinker_orders(previous_days=1, exchange_rates=None):
     baselinker_client = get_baselinker_client()
@@ -157,11 +173,13 @@ def fetch_baselinker_orders(previous_days=1, exchange_rates=None):
     )
     return orders
 
+
 @task(log_prints=True)
 def fetch_baselinker_products():
     baselinker_client = get_baselinker_client()
     products = baselinker_client.get_products_in_domain_format()
     return products
+
 
 @task(log_prints=True)
 def fetch_baselinker_marketplaces():
@@ -190,13 +208,13 @@ def send_slack_message(message):
     send_chat_message.submit(
         slack_credentials=slack_credentials_block, channel=channel, text=message
     )
-    
-    
+
+
 @task(log_prints=True)
 def append_to_sheets_db(daily_sell_report, date: datetime.date):
     import gspread
     from google.oauth2.service_account import Credentials
-    
+
     SHEETS_CRED = GcpCredentials.load("sheets-service-account")
     SHEET_ID = Variable.get("sheet-id")
     WORKSHEET_NAME = Variable.get("worksheet-name", "Dane")
@@ -208,8 +226,8 @@ def append_to_sheets_db(daily_sell_report, date: datetime.date):
         SHEETS_CRED.service_account_info.get_secret_value(), scopes=scopes
     )
     gc = gspread.authorize(creds)
-    sh  = gc.open_by_key(SHEET_ID)
-    ws  = sh.worksheet(WORKSHEET_NAME)
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.worksheet(WORKSHEET_NAME)
     for row in daily_sell_report:
         marketplace = row["marketplace"]
         orders = int(row["orders_count"])
@@ -218,36 +236,51 @@ def append_to_sheets_db(daily_sell_report, date: datetime.date):
             [date.isoformat(), marketplace, orders, revenue],
             value_input_option="USER_ENTERED",
         )
-        
-@flow(flow_run_name="DB: Sync Products", log_prints=True)
-def db_sync_products():
-    apilo_products = fetch_apilo_products.submit()
-    baselinker_products = fetch_baselinker_products.submit()
-    
-    products_dict = {**baselinker_products.result(), **apilo_products.result()} # Apilo products take precedence
-    products = products_dict.values()
-    with Session(engine) as session:
-        for product in products:
-            upsert_product(session, product)
-            session.commit()
 
-@flow(flow_run_name="DB: Sync Marketplaces", log_prints=True)
-def db_sync_marketplaces():
-    apilo_marketplaces = fetch_apilo_marketplaces.submit()
-    baselinker_marketplaces = fetch_baselinker_marketplaces.submit()
 
-    marketplaces = apilo_marketplaces.result() + baselinker_marketplaces.result()
+@task
+def create_orders_batch(order_domain_dicts: list[dict]):
+    from src.domain.entities import Order as OrderDomain
+
     with Session(engine) as session:
-        for marketplace in marketplaces:
-            upsert_marketplace(session, marketplace)
-            session.commit()
+        for order_dict in order_domain_dicts:
+            order_domain = OrderDomain.model_validate(order_dict)
+            get_or_create_order_with_dependencies_parallel(
+                session=session, order_domain=order_domain
+            )
+        session.commit()
+
+
+@task
+def s3_download_file(key: str, bucket: str, endpoint_url: str = None):
+    import boto3
+
+    S3_ACCESS_KEY_ID = Secret.load("s3-bucket-access-key-id").get()
+    S3_SECRET_ACCESS_KEY = Secret.load("s3-bucket-secret-access-key").get()
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=endpoint_url,
+        aws_access_key_id=S3_ACCESS_KEY_ID,
+        aws_secret_access_key=S3_SECRET_ACCESS_KEY,
+    )
+    tmp_file = tempfile.NamedTemporaryFile(delete=False)
+    s3.download_fileobj(bucket, key, tmp_file)
+    tmp_file.close()
+    return tmp_file.name
 
 
 @flow(flow_run_name="Daily Sell Report: previous_days={previous_days}", log_prints=True)
-def get_sell_report(previous_days: int=1, slack: bool=False, email: bool=False, sheets: bool=False):
+def get_sell_report(
+    previous_days: int = 1,
+    slack: bool = False,
+    email: bool = False,
+    sheets: bool = False,
+):
     import pandas as pd
+
     MARKETPLACE_RENAME_MAP = Variable.get("marketplace-rename-map", default={})
-    
+
     logger = get_run_logger()
     exchange_rates = get_exchange_rates_nbp.submit()
     df_sell_apilo = fetch_apilo_sell_statistics.submit(
@@ -259,7 +292,7 @@ def get_sell_report(previous_days: int=1, slack: bool=False, email: bool=False, 
 
     df_sell = pd.concat([df_sell_apilo.result(), df_sell_base.result()])
     df_sell["total_net_payment_pln"] = df_sell.apply(
-        convert_to_pln, axis=1, exchange_rates=exchange_rates.result()
+        convert_to_pln_row, axis=1, exchange_rates=exchange_rates.result()
     )
     summary = get_summary_string(df_sell, MARKETPLACE_RENAME_MAP)
     date_range = get_date_range(previous_days)
@@ -284,7 +317,9 @@ def get_sell_report(previous_days: int=1, slack: bool=False, email: bool=False, 
     if sheets is True:
         if previous_days == 1:
             date = datetime.date.today() - datetime.timedelta(days=previous_days)
-            summary_table_simple = get_summary_table_simple(df_sell, MARKETPLACE_RENAME_MAP)
+            summary_table_simple = get_summary_table_simple(
+                df_sell, MARKETPLACE_RENAME_MAP
+            )
             append_to_sheets_db(summary_table_simple, date)
 
 
@@ -294,9 +329,7 @@ def refresh_apilo_token():
     apilo_client = get_apilo_client()
     apilo_client.refresh_access_token()
     Secret(value=apilo_client.token).save("apilo-token", overwrite=True)
-    Secret(value=apilo_client.refresh_token).save(
-        "apilo-refresh-token", overwrite=True
-    )
+    Secret(value=apilo_client.refresh_token).save("apilo-refresh-token", overwrite=True)
     logger.info("Apilo token refreshed successfully.")
 
 
@@ -310,18 +343,60 @@ def get_apilo_token_secret():
 @flow(flow_run_name="debug-prefect-version", log_prints=True)
 def debug_prefect_version():
     import pathlib
-
     import prefect
-    print("Running Prefect", prefect.__version__, "from", pathlib.Path(prefect.__file__).parent)
+    print(
+        "Running Prefect",
+        prefect.__version__,
+        "from",
+        pathlib.Path(prefect.__file__).parent,
+    )
+    
+    
+@flow(flow_run_name="DB: Sync Products", log_prints=True)
+def db_sync_products():
+    apilo_products = fetch_apilo_products.submit()
+    baselinker_products = fetch_baselinker_products.submit()
+
+    products_dict = {
+        **baselinker_products.result(),
+        **apilo_products.result(),
+    }  # Apilo products take precedence
+    products = products_dict.values()
+    with Session(engine) as session:
+        for product in products:
+            upsert_product(session, product)
+            session.commit()
 
 
-@flow(flow_run_name="Get Orders: previous_days={previous_days}", log_prints=True)
-def collect_orders(previous_days: int=1, apilo: bool=True, baselinker: bool=True):
+@flow(flow_run_name="DB: Sync Marketplaces", log_prints=True)
+def db_sync_marketplaces():
+    apilo_marketplaces = fetch_apilo_marketplaces.submit()
+    baselinker_marketplaces = fetch_baselinker_marketplaces.submit()
+
+    marketplaces = apilo_marketplaces.result() + baselinker_marketplaces.result()
+    with Session(engine) as session:
+        for marketplace in marketplaces:
+            upsert_marketplace(session, marketplace)
+            session.commit()
+            
+            
+@flow(flow_run_name="DB: Sync Offers: Apilo", log_prints=True)
+def db_sync_offers_apilo():
     logger = get_run_logger()
-    
-    # PSQL_DB_URL = Secret.load("psql-db-url").get()
-    
-    
+    apilo_client = get_apilo_client()
+
+    offers = apilo_client.get_offers_in_domain_format()
+    logger.info(f"Total offers fetched: {len(offers)}")
+
+    with Session(engine) as session:
+        for offer in offers:
+            get_or_create_offer_with_dependencies_efficient(session, offer)
+        session.commit()
+
+
+@flow(flow_run_name="DB: Collect Orders: previous_days={previous_days}", log_prints=True)
+def db_collect_orders(previous_days: int = 1, apilo: bool = True, baselinker: bool = True):
+    logger = get_run_logger()
     exchange_rates = get_exchange_rates_nbp.submit()
     orders_apilo = None
     orders_baselinker = None
@@ -342,7 +417,7 @@ def collect_orders(previous_days: int=1, apilo: bool=True, baselinker: bool=True
         orders.extend(orders_baselinker.result())
 
     logger.info(f"Total orders fetched: {len(orders)}")
-    
+
     # order_dicts = [o.model_dump(mode="json") for o in orders]
     # batch_size = 500  # Tune this for your DB and infra
     # batch_num = 20
@@ -350,38 +425,89 @@ def collect_orders(previous_days: int=1, apilo: bool=True, baselinker: bool=True
     # # batches = list(chunked2(order_dicts, batch_num))
     # batch_orders = create_orders_batch.map(batches)
     # wait(batch_orders)  # Wait for all batches to complete
-    
+    created_list = []
     with Session(engine) as session:
         for order in orders:
-            # get_or_create_order(session=session, order_domain=order)
-            get_or_create_order_with_dependencies_efficient(session=session, order_domain=order)
-
-@task
-def create_orders_batch(order_domain_dicts: list[dict]):
-    from src.domain.entities import Order as OrderDomain
-
-    with Session(engine) as session:
-        for order_dict in order_domain_dicts:
-            order_domain = OrderDomain.model_validate(order_dict)
-            get_or_create_order_with_dependencies_parallel(session=session, order_domain=order_domain)
-        session.commit()
-        
-        
-@flow(flow_run_name="Collect Offers: Apilo", log_prints=True)
-def collect_offers_apilo():
+            _, created = get_or_create_order_with_dependencies_efficient(
+                session=session, order_domain=order
+            )
+            created_list.append(created)
+    logger.info(f"Total orders created: {sum(created_list)}")
+    
+    
+@flow(flow_run_name="DB: Collect Orders parallel: previous_days={previous_days}", log_prints=True)
+def db_collect_orders_parallel(previous_days: int = 1, apilo: bool = True, baselinker: bool = True):
     logger = get_run_logger()
-    apilo_client = get_apilo_client()
     exchange_rates = get_exchange_rates_nbp.submit()
-    
-    offers = apilo_client.get_offers_in_domain_format(exchange_rates=exchange_rates)
-    logger.info(f"Total offers fetched: {len(offers)}")
-    
+    orders_apilo = None
+    orders_baselinker = None
+
+    if apilo:
+        orders_apilo = fetch_apilo_orders.submit(
+            previous_days=previous_days, exchange_rates=exchange_rates
+        )
+    if baselinker:
+        orders_baselinker = fetch_baselinker_orders.submit(
+            previous_days=previous_days, exchange_rates=exchange_rates
+        )
+
+    orders = []
+    if orders_apilo is not None:
+        orders.extend(orders_apilo.result())
+    if orders_baselinker is not None:
+        orders.extend(orders_baselinker.result())
+
+    logger.info(f"Total orders fetched: {len(orders)}")
+    order_dicts = [o.model_dump(mode="json") for o in orders]
+    # batch_size = 500
+    # batches = list(chunked_by_chunk_size(order_dicts, batch_size))
+    batch_num = 20
+    batches = list(chunked_by_num_chunks(order_dicts, batch_num))
+    batch_orders = create_orders_batch.map(batches)
+    wait(batch_orders)
+
+
+@flow(flow_run_name="DB: Collect Stock Info", log_prints=True)
+def db_collect_stock_info(key: str):
+    BUCKET_NAME = Variable.get("s3-bucket-name")
+    ENDPOINT_URL = Variable.get("s3-bucket-endpoint-url")
+    TIMEZONE_PYTZ_STR = Variable.get("timezone-pytz-str", default="Europe/Warsaw")
+    TIMEZONE = pytz.timezone(TIMEZONE_PYTZ_STR)
+
+    from src.domain.entities import ProductStock as ProductStockDomain
+
+    logger = get_run_logger()
+    dt_now = datetime.datetime.now(TIMEZONE)
+
+    stock_file = s3_download_file(
+        key=key, bucket=BUCKET_NAME, endpoint_url=ENDPOINT_URL
+    )
+
+    with open(stock_file, "r", encoding="utf-8") as f:
+        products = json.load(f)
+
+    logger.info(f"Total products fetched: {len(products)}")
+
     with Session(engine) as session:
-        for offer in offers:
-            upsert_product(session, offer)
-            session.commit()
+        for product_data in products:
+            product_stock = ProductStockDomain.model_validate(product_data)
+            create_stock_history_with_upsert_product(
+                session, product_stock, date=dt_now
+            )
+        session.commit()
+
+
+@flow(flow_run_name="DB: Collect Orders with Deps: previous_days={previous_days}", log_prints=True)
+def db_collect_orders_with_deps(previous_days: int = 1, apilo: bool = True, baselinker: bool = True):
+    db_sync_marketplaces()
+    db_sync_products()
+    db_collect_orders(
+        previous_days=previous_days, apilo=apilo, baselinker=baselinker
+    )   
+
 
 if __name__ == "__main__":
-    # get_orders(previous_days=16, apilo=True, baselinker=False)
-    db_sync_products()
-    db_sync_marketplaces()
+    # db_collect_offers_apilo()
+    # db_collect_stock_info()
+    # db_collect_orders_with_deps()
+    get_sell_report()

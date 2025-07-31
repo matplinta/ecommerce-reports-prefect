@@ -3,3 +3,4 @@
 *.pyc
 .python-version
 notebook.ipynb
+_data

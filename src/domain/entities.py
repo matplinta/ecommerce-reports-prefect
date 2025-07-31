@@ -1,18 +1,7 @@
 from decimal import Decimal
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator, computed_field
+from pydantic import BaseModel, Field, field_validator
 
-
-OFFER_STATUS_MAP = {
-    2: "Active",              # Aktywna
-    66: "Creating (errored)", # Tworzenie
-    67: "Creating",           # Tworzenie
-    80: "Ended",              # Zakończona
-    81: "Ended (No status)",  # Zakończona (brak stanu)
-    82: "Ended (manually)",   # Zakończona (ręcznie)
-    83: "Ended (naturally)",  # Zakończona (naturalnie)
-    89: "Archived",           # Archiwum
-}
 
 class Marketplace(BaseModel):
     external_id: str
@@ -24,26 +13,28 @@ class Product(BaseModel):
     sku: str
     name: str | None = None
     image_url: str | None = None
+    kind: str | None = None
+    unit_purchase_cost: Decimal | None = None
+    
+class ProductStock(Product):
+    stock: int
 
 class Offer(BaseModel):
     external_id: str # check if not null
     name: str
-    started_at: datetime
+    started_at: datetime | None = None
     ended_at: datetime | None = None
     quantity_selling: int
     sku: str
     ean: str | None = None
     marketplace_extid: str
     platform_origin: str 
-    type: str
+    marketplace_type: str
+    marketplace_name: str
     price_with_tax: Decimal
     status_id: int
-    
-    
-    @computed_field
-    @property
-    def status_name(self) -> str:
-        return OFFER_STATUS_MAP.get(self.status_id, 'unknown')
+    status_name: str
+    is_active: bool
 
     @field_validator("price_with_tax")
     @classmethod

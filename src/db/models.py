@@ -32,11 +32,11 @@ class Offer(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     external_id: str = Field(index=True)  # upstream identifier (listing ID)
     name: str = Field(max_length=255, nullable=False)
-    started_at: datetime = Field(index=True, nullable=False)
+    started_at: datetime | None = Field(index=True)
     ended_at: datetime | None = None
     quantity_selling: int = Field(default=0, nullable=False)
     
-    ean: str | None = Field(max_length=13, nullable=True)
+    ean: str | None = Field(max_length=100, nullable=True)
     product_id: int = Field(foreign_key="product.id", index=True)
     marketplace_id: int = Field(foreign_key="marketplace.id", index=True, ondelete="CASCADE")
 
@@ -74,6 +74,11 @@ class Product(SQLModel, table=True):
     sku: str = Field(index=True, unique=True)
     name: str = Field(max_length=255)
     image_url: str | None = Field(default=None, description="URL to the product image")
+    kind: str | None = Field(default=None, description="Kind of the product (e.g., 'Komplet', 'Towar')")
+    unit_purchase_cost: Decimal | None = Field(
+        default=0, max_digits=10, decimal_places=2, description="Unit purchase cost of the product"
+    )
+    
 
     marketplaces: list[Marketplace] = Relationship(
         back_populates="products",
@@ -110,7 +115,7 @@ class Order(SQLModel, table=True):
     )
     delivery_method: str | None = Field(max_length=255, default=None, description="Delivery method name")
     currency: str = Field(max_length=3, default="PLN", description="Currency of the price")
-    status: str = Field(max_length=100)
+    status: str | None = Field(max_length=100)
     country: str | None = Field(max_length=100)
     city: str | None = Field(max_length=100)
 

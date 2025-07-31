@@ -1,13 +1,12 @@
 import base64
 from datetime import datetime, timedelta
 
-import pandas as pd
 import pytz
 import requests
 
 from .abstract_client import AbstractClient
-from src.domain.entities import Order, OrderItem, Product, Marketplace
-from src.utils import code_to_country
+from src.domain.entities import Order, OrderItem, Product, Marketplace, Offer
+from src.utils import code_to_country, convert_to_pln
 
 
 class ApiloClient(AbstractClient):
@@ -35,6 +34,21 @@ class ApiloClient(AbstractClient):
         if token is None or str(token) == "-1":
             self.obtain_access_token()
             
+    OFFER_STATUS_MAP = {
+        2: "Active",              # Aktywna
+        66: "Creating (errored)", # Tworzenie
+        67: "Creating",           # Tworzenie
+        80: "Ended",              # Zakończona
+        81: "Ended (No status)",  # Zakończona (brak stanu)
+        82: "Ended (manually)",   # Zakończona (ręcznie)
+        83: "Ended (naturally)",  # Zakończona (naturalnie)
+        89: "Archived",           # Archiwum
+    }
+    
+    def is_active_offer(self, status: int):
+        """Check if the offer is active based on its status."""
+        return status in [2]
+
     @property
     def platform_origin(self) -> str:
         return "Apilo"
@@ -312,7 +326,7 @@ class ApiloClient(AbstractClient):
         sources = self.get_order_sources()
         return {
             market["id"]: {"name": market["name"], "type": market["description"].lower()}
-            for market in sources.get("platforms", []) if market["description"].lower() != "manualaccount"
+            for market in sources.get("platforms", []) #if market["description"].lower() != "manualaccount"
         }
 
     def get_orders(self, date_from: datetime, date_to: datetime = None, limit=512):
@@ -383,6 +397,12 @@ class ApiloClient(AbstractClient):
             response_key="orders",
             **query_params
         )
+        
+    
+    def get_offers_in_domain_format(self) -> list[Offer]:
+        """Returns offers in a domain format."""
+        offers = self.get_offers()
+        return self._to_domain_offers(offers)
 
     
     @staticmethod
@@ -399,7 +419,7 @@ class ApiloClient(AbstractClient):
         """
 
 
-        sources = self.get_order_sources_by_id()
+        sources = self.get_marketplaces()
         simplified_orders = []
         for order in orders:
             order_status = order["status"]
@@ -435,14 +455,8 @@ class ApiloClient(AbstractClient):
         """Converts orders to a domain format for easier processing.
         Format is a list of Order objects.
         """
-        def convert_to_pln(price, currency):
-            if currency == "PLN":
-                return price
-            if exchange_rates and currency in exchange_rates:
-                return price * exchange_rates[currency]
-            raise ValueError(f"Unsupported currency: {currency}")
         
-        sources = self.get_order_sources_by_id()
+        sources = self.get_marketplaces()
         status_types = self.get_order_status_types()
         domain_orders = []
         for order in orders:
@@ -486,7 +500,7 @@ class ApiloClient(AbstractClient):
                     sku=item["sku"],
                     name=item["originalName"],
                     price=float(item["originalPriceWithTax"]),
-                    price_pln=convert_to_pln(float(item["originalPriceWithTax"]), currency),
+                    price_pln=convert_to_pln(float(item["originalPriceWithTax"]), currency, exchange_rates),
                     quantity=int(item["quantity"]),
                 )
                 for item in order["orderItems"] if item["type"] != 2 and item["sku"] is not None  # Exclude delivery items
@@ -496,9 +510,9 @@ class ApiloClient(AbstractClient):
                 Order(
                     external_id=order_id,
                     total_gross_original=total_paid_gross,
-                    total_gross_pln=convert_to_pln(total_paid_gross, currency),
+                    total_gross_pln=convert_to_pln(total_paid_gross, currency, exchange_rates),
                     delivery_cost_original=delivery_cost,
-                    delivery_cost_pln=convert_to_pln(delivery_cost, currency),
+                    delivery_cost_pln=convert_to_pln(delivery_cost, currency, exchange_rates),
                     delivery_method=delivery_item["originalName"] if delivery_item else None,
                     currency=currency,
                     status=order_status_name,
@@ -513,7 +527,6 @@ class ApiloClient(AbstractClient):
                 )
             )
         return domain_orders
-
 
     def _to_domain_products(self, products) -> dict:
         """Converts products to a domain format for easier processing.
@@ -543,3 +556,56 @@ class ApiloClient(AbstractClient):
                 image_url=image_url.get("link") if image_url else None,
             )
         return domain_products
+
+    def _to_domain_offers(self, offers) -> list[Offer]:
+        """Converts offers to a domain format for easier processing.
+        Format is a list of Offer objects.
+        """
+        domain_offers = []
+        marketplaces = self.get_marketplaces()
+        for offer in offers:
+            if not offer["idExternal"] or len(offer["auctionProducts"]) != 1:
+                continue
+            
+            started_at = None
+            if offer["startedAt"]:
+                started_at = datetime.fromisoformat(offer["startedAt"])
+                started_at = started_at.astimezone(tz=self.timezone)
+                
+            ended_at = None
+            if offer["endedAt"]:
+                ended_at = datetime.fromisoformat(offer["endedAt"])
+                ended_at = ended_at.astimezone(tz=self.timezone)
+                
+            product = offer["auctionProducts"][0]
+            sku = product["sku"]
+            ean = product["ean"]
+            quantity_selling = product["quantitySelling"]
+            price_with_tax = float(product["priceWithTax"])
+            marketplace_extid = offer["platformAccount"]["id"]
+            marketplace_type = marketplaces.get(marketplace_extid).get("type")
+            marketplace_name = marketplaces.get(marketplace_extid).get("name")
+            marketplace_type, marketplace_name = marketplaces[marketplace_extid]["type"], marketplaces[marketplace_extid]["name"]
+            marketplace_default_name = f"{marketplace_type} - {marketplace_name}"
+            marketplace_custom_name = self.marketplace_rename_map.get(marketplace_default_name, marketplace_default_name)
+
+            domain_offers.append(
+                Offer(
+                    external_id=str(offer["idExternal"]),
+                    name=offer["name"],
+                    started_at=started_at,
+                    ended_at=ended_at,
+                    quantity_selling=quantity_selling,
+                    sku=sku,
+                    ean=ean,
+                    marketplace_extid=str(marketplace_extid),
+                    marketplace_type=marketplace_type,
+                    marketplace_name=marketplace_custom_name,
+                    platform_origin=self.platform_origin, 
+                    price_with_tax=price_with_tax,
+                    status_id=offer["status"],
+                    status_name=self.OFFER_STATUS_MAP.get(offer["status"], "Unknown"),
+                    is_active=self.is_active_offer(offer["status"]),
+                )
+            )
+        return domain_offers

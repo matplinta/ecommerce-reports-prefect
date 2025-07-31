@@ -9,8 +9,8 @@ DB_URL = Secret.load("psql-db-url").get()
 
 engine = create_engine(
     DB_URL,
-    pool_size=200,         # default is 5
-    max_overflow=50,      # default is 10
+    pool_size=20,         # default is 5
+    max_overflow=0,      # default is 10
     pool_timeout=60, 
 )
 # engine = create_engine(str(settings.DB_URL), echo=True)      # echo prints SQL – good for tests

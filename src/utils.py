@@ -1,13 +1,20 @@
 import datetime
 import pycountry
 
-def convert_to_pln(row, exchange_rates):
+def convert_to_pln_row(row, exchange_rates):
     if row["currency"] in exchange_rates:
         return (
             row["total_net_payment_in_default_currency"]
             * exchange_rates[row["currency"]]
         )
     return row["total_net_payment_in_default_currency"]
+
+def convert_to_pln(price, currency, exchange_rates):
+    if currency == "PLN":
+        return price
+    if exchange_rates and currency in exchange_rates:
+        return price * exchange_rates[currency]
+    return price
 
 def code_to_country(code: str) -> str | None:
     if not code:

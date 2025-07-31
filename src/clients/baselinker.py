@@ -8,7 +8,7 @@ import pytz
 
 from .abstract_client import AbstractClient
 from src.domain.entities import Order, OrderItem, Product, Marketplace
-from src.utils import code_to_country
+from src.utils import code_to_country, convert_to_pln
 
 
 class BaselinkerClient(AbstractClient):
@@ -328,7 +328,7 @@ class BaselinkerClient(AbstractClient):
         Format is a list of dictionaries with keys:
             {"source", "order_id", "total_paid", "delivery_price", "currency"}
         """
-        sources = self.get_order_sources_by_id()
+        sources = self.get_marketplaces()
         simplified_orders = []
         for order in orders:
             order_date = datetime.fromtimestamp(order["date_add"], tz=self.timezone)
@@ -369,14 +369,8 @@ class BaselinkerClient(AbstractClient):
         """Converts orders to a canonical format for easier processing.
         Format is a list of OrderCanonical objects.
         """
-        def convert_to_pln(price, currency):
-            if currency == "PLN":
-                return price
-            if exchange_rates and currency in exchange_rates:
-                return price * exchange_rates[currency]
-            return price
         
-        sources = self.get_order_sources_by_id()
+        sources = self.get_marketplaces()
         status_types = self.get_order_status_types()
         domain_orders = []
         for order in orders:
@@ -417,7 +411,7 @@ class BaselinkerClient(AbstractClient):
                     sku=item["sku"],
                     name=item["name"],
                     price=float(item["price_brutto"]),
-                    price_pln=convert_to_pln(float(item["price_brutto"]), currency),
+                    price_pln=convert_to_pln(float(item["price_brutto"]), currency, exchange_rates),
                     quantity=int(item["quantity"]),
                 )
                 for item in order["products"]
@@ -427,9 +421,9 @@ class BaselinkerClient(AbstractClient):
                 Order(
                     external_id=str(order_id),
                     total_gross_original=total_paid_gross,
-                    total_gross_pln=convert_to_pln(total_paid_gross, currency),
+                    total_gross_pln=convert_to_pln(total_paid_gross, currency, exchange_rates),
                     delivery_cost_original=delivery_cost,
-                    delivery_cost_pln=convert_to_pln(delivery_cost, currency),
+                    delivery_cost_pln=convert_to_pln(delivery_cost, currency, exchange_rates),
                     delivery_method=order.get("delivery_method", None),
                     currency=currency,
                     status=order_status_name,
