@@ -24,6 +24,7 @@ from src.clients.exchange_rates import (
 from src.utils import (
     chunked_by_chunk_size,
     chunked_by_num_chunks,
+    get_models_json_dumped,
     convert_to_pln_row,
     generate_html_email,
     generate_markdown_table,
@@ -33,6 +34,7 @@ from src.utils import (
     get_summary_table_simple,
 )
 
+BATCH_NUM = Variable.get("batch-num", default=20)
 
 def initialize_db_config():
     """Initialize database configuration from Prefect secrets."""
@@ -242,10 +244,31 @@ def append_to_sheets_db(daily_sell_report, date: datetime.date):
 
 
 @task
+def create_products_batch(order_domain_dicts: list[dict]):
+    initialize_db_config()
+    from src.db.operations import bulk_upsert_products_parallel
+    return bulk_upsert_products_parallel(order_domain_dicts)
+
+
+@task
 def create_orders_batch(order_domain_dicts: list[dict]):
     initialize_db_config()
     from src.db.operations import bulk_upsert_orders_parallel
-    bulk_upsert_orders_parallel(order_domain_dicts)
+    return bulk_upsert_orders_parallel(order_domain_dicts)
+
+
+@task
+def create_offers_batch(order_domain_dicts: list[dict]):
+    initialize_db_config()
+    from src.db.operations import bulk_upsert_offers_parallel
+    return bulk_upsert_offers_parallel(order_domain_dicts)
+
+
+@task
+def create_stock_history_batch(order_domain_dicts: list[dict], date: datetime):
+    initialize_db_config()
+    from src.db.operations import bulk_create_stock_history_parallel
+    return bulk_create_stock_history_parallel(order_domain_dicts, date)
 
 
 @task
@@ -352,8 +375,6 @@ def debug_prefect_version():
 @flow(flow_run_name="DB: Sync Products", log_prints=True)
 def db_sync_products():
     logger = get_run_logger()
-    initialize_db_config()
-    from src.db.operations import bulk_upsert_products
 
     apilo_products = fetch_apilo_products.submit()
     baselinker_products = fetch_baselinker_products.submit()
@@ -363,7 +384,10 @@ def db_sync_products():
         **apilo_products.result(),
     }  # Apilo products take precedence
     products = products_dict.values()
-    count = bulk_upsert_products(products)
+    
+    batches = list(chunked_by_num_chunks(get_models_json_dumped(products), BATCH_NUM))
+    batch_products = create_products_batch.map(batches)
+    count = sum(batch_products.result())
     logger.info(f"Processed {count} products")
 
 
@@ -384,16 +408,15 @@ def db_sync_marketplaces():
 @flow(flow_run_name="DB: Sync Offers: Apilo", log_prints=True)
 def db_sync_offers_apilo():
     logger = get_run_logger()
-    initialize_db_config()
-    from src.db.operations import bulk_upsert_offers
-
     apilo_client = get_apilo_client()
 
     offers = apilo_client.get_offers_in_domain_format()
     update_apilo_secrets(apilo_client)
-    
     logger.info(f"Total offers fetched: {len(offers)}")
-    updated = bulk_upsert_offers(offers)
+    
+    batches = list(chunked_by_num_chunks(get_models_json_dumped(offers), BATCH_NUM))
+    batch_offers = create_offers_batch.map(batches)
+    updated = sum(batch_offers.result())
     logger.info(f"Updated {updated} offers from Apilo")
 
 
@@ -439,7 +462,6 @@ def db_collect_orders_parallel(
     previous_days: int = 1, apilo: bool = True, baselinker: bool = True
 ):
     logger = get_run_logger()
-    initialize_db_config()
     exchange_rates = get_exchange_rates_nbp.submit()
     orders_apilo = None
     orders_baselinker = None
@@ -460,13 +482,12 @@ def db_collect_orders_parallel(
         orders.extend(orders_baselinker.result())
 
     logger.info(f"Total orders fetched: {len(orders)}")
-    order_dicts = [o.model_dump(mode="json") for o in orders]
     # batch_size = 500
     # batches = list(chunked_by_chunk_size(order_dicts, batch_size))
-    batch_num = 20
-    batches = list(chunked_by_num_chunks(order_dicts, batch_num))
+    batches = list(chunked_by_num_chunks(get_models_json_dumped(orders), BATCH_NUM))
     batch_orders = create_orders_batch.map(batches)
-    wait(batch_orders)
+    created = sum(batch_orders.result())
+    logger.info(f"Newly created orders: {created}")
 
 
 @flow(flow_run_name="DB: Collect Stock History", log_prints=True)
@@ -476,8 +497,6 @@ def db_collect_stock_history(key: str):
     TIMEZONE_PYTZ_STR = Variable.get("timezone-pytz-str", default="Europe/Warsaw")
     TIMEZONE = pytz.timezone(TIMEZONE_PYTZ_STR)
     logger = get_run_logger()
-    initialize_db_config()
-    from src.db.operations import bulk_create_stock_history
 
     dt_now = datetime.datetime.now(TIMEZONE)
 
@@ -489,7 +508,9 @@ def db_collect_stock_history(key: str):
         products = json.load(f)
 
     logger.info(f"Total products fetched: {len(products)}")
-    bulk_create_stock_history(products, date=dt_now)
+    batches = list(chunked_by_num_chunks(get_models_json_dumped(products), BATCH_NUM))
+    batch_products = create_stock_history_batch.map(batches, dt_now)
+    wait(batch_products)
 
 
 @flow(
@@ -501,9 +522,9 @@ def db_collect_orders_with_deps(
 ):
     db_sync_marketplaces()
     db_sync_products()
-    db_collect_orders(previous_days=previous_days, apilo=apilo, baselinker=baselinker)
+    db_collect_orders_parallel(previous_days=previous_days, apilo=apilo, baselinker=baselinker)
 
 
 if __name__ == "__main__":
-    # db_collect_orders_with_deps()
-    db_sync_offers_apilo()
+    db_collect_orders_with_deps()
+    # db_sync_offers_apilo()

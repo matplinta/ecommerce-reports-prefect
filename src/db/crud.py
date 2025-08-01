@@ -754,8 +754,8 @@ def get_or_create_offer_with_dependencies_efficient(
         existing_offer.status = offer_domain.status_name
         existing_offer.product_id = prod.id  # Ensure correct product relation
 
-        # session.commit()
-        session.flush()  # Ensure existing_offer.id is set
+        session.commit()
+        # session.flush()  # Ensure existing_offer.id is set
         session.refresh(existing_offer)
         
         if offer_domain.is_active:
@@ -792,7 +792,7 @@ def get_or_create_offer_with_dependencies_efficient(
         )
         session.add(price_history)
 
-    # session.commit()
-    # session.refresh(new_offer)
-    session.flush()  # Ensure new_offer.id is set
+    session.commit()
+    session.refresh(new_offer)
+    # session.flush()  # Ensure new_offer.id is set
     return new_offer, True
