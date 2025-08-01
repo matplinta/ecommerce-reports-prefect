@@ -509,7 +509,7 @@ def db_collect_stock_history(key: str):
         products = json.load(f)
 
     logger.info(f"Total products fetched: {len(products)}")
-    batches = list(chunked_by_num_chunks(get_models_json_dumped(products), BATCH_NUM))
+    batches = list(chunked_by_num_chunks(products, BATCH_NUM))
     batch_products = create_stock_history_batch.map(batches, dt_now)
     wait(batch_products)
 
