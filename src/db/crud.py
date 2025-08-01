@@ -731,7 +731,7 @@ def get_or_create_offer_with_dependencies_efficient(
 
     # 2. Product (upsert)
     prod = upsert_product_old(session, offer_domain.sku, offer_domain.name)
-    session.flush()
+    # session.flush()
     # 3. Ensure product-marketplace link
     upsert_product_marketplace_link(session, prod.id, mp.id)
 
@@ -739,6 +739,7 @@ def get_or_create_offer_with_dependencies_efficient(
     existing_offer = session.exec(
         select(Offer).where(
             Offer.external_id == offer_domain.external_id,
+            Offer.origin_id == offer_domain.origin_id,
             Offer.marketplace_id == mp.id,
         )
     ).first()
@@ -754,9 +755,9 @@ def get_or_create_offer_with_dependencies_efficient(
         existing_offer.status = offer_domain.status_name
         existing_offer.product_id = prod.id  # Ensure correct product relation
 
-        session.commit()
+        # session.commit()
         # session.flush()  # Ensure existing_offer.id is set
-        session.refresh(existing_offer)
+        # session.refresh(existing_offer)
         
         if offer_domain.is_active:
             price_history = PriceHistory(
@@ -771,6 +772,7 @@ def get_or_create_offer_with_dependencies_efficient(
     # 5. Create new offer
     new_offer = Offer(
         external_id=offer_domain.external_id,
+        origin_id=offer_domain.origin_id,
         name=offer_domain.name,
         started_at=offer_domain.started_at,
         ended_at=offer_domain.ended_at,
@@ -792,7 +794,7 @@ def get_or_create_offer_with_dependencies_efficient(
         )
         session.add(price_history)
 
-    session.commit()
-    session.refresh(new_offer)
+    # session.commit()
+    # session.refresh(new_offer)
     # session.flush()  # Ensure new_offer.id is set
     return new_offer, True

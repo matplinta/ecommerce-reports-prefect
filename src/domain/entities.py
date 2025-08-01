@@ -21,6 +21,7 @@ class ProductStock(Product):
 
 class Offer(BaseModel):
     external_id: str # check if not null
+    origin_id: str # check if not null
     name: str
     started_at: datetime | None = None
     ended_at: datetime | None = None

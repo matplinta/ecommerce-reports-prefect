@@ -27,10 +27,11 @@ class ProductMarketplaceLink(SQLModel, table=True):
 # ────────────────────────────────────────────
 class Offer(SQLModel, table=True):
     __tablename__ = "offer"
-    __table_args__ = (UniqueConstraint("external_id", "marketplace_id"),)
+    __table_args__ = (UniqueConstraint("external_id", "origin_id", "marketplace_id"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    external_id: str = Field(index=True)  # upstream identifier (listing ID)
+    external_id: str = Field(index=True)  # upstream identifier (listing ID from source)
+    origin_id: str = Field()  # upstream identifier (listing ID from source marketplace)
     name: str = Field(max_length=255, nullable=False)
     started_at: datetime | None = Field(index=True)
     ended_at: datetime | None = None

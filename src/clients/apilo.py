@@ -591,7 +591,8 @@ class ApiloClient(AbstractClient):
 
             domain_offers.append(
                 Offer(
-                    external_id=str(offer["idExternal"]),
+                    external_id=str(offer["id"]),
+                    origin_id=str(offer["idExternal"]),
                     name=offer["name"],
                     started_at=started_at,
                     ended_at=ended_at,

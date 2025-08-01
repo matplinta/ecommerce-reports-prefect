@@ -39,7 +39,7 @@ BATCH_NUM = Variable.get("batch-num", default=20)
 def initialize_db_config():
     """Initialize database configuration from Prefect secrets."""
     try:
-        db_url = Secret.load("psql-db-url").get()
+        db_url = Secret.load("psql-db-urlxxx").get()
         update_settings(POSTGRES_DB_URI=db_url)
     except ValueError as e:
         logger = get_run_logger()
@@ -526,5 +526,5 @@ def db_collect_orders_with_deps(
 
 
 if __name__ == "__main__":
-    db_collect_orders_with_deps()
-    # db_sync_offers_apilo()
+    # db_collect_orders_with_deps()
+    db_sync_offers_apilo()
