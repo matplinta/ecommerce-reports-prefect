@@ -37,7 +37,7 @@ from src.utils import (
 def initialize_db_config():
     """Initialize database configuration from Prefect secrets."""
     try:
-        db_url = Secret.load("psql-db-urlxxx").get()
+        db_url = Secret.load("psql-db-url").get()
         update_settings(POSTGRES_DB_URI=db_url)
     except ValueError as e:
         logger = get_run_logger()
