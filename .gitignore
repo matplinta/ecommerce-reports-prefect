@@ -2,3 +2,6 @@
 *__pycache__
 *.pyc
 .python-version
+notebook.ipynb
+_data
+.env

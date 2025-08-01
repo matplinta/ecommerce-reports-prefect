@@ -114,3 +114,13 @@ Refreshes the Apilo API token and updates the corresponding Prefect Secrets.
 
 ### **get_apilo_token_secret**  
 Displays the current Apilo token stored in the Prefect Secret.
+
+# Migrations (alembic)
+Change src/db/alembic.ini `sqlalchemy.url` value to the connection to db url
+```
+alembic revision --autogenerate -m "add unit_purchace_cost to Product"
+```
+
+```
+alembic upgrade head
+```

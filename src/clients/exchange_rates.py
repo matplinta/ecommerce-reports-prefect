@@ -78,7 +78,7 @@ class ExchangeRateNbpApi:
         return data["rates"][0]["mid"]
 
     def get_exchange_rates_for_date(
-        self, date: str, currencies: str, table: str = "A", max_retries: int = 7
+        self, date: str, currencies: str = "CZK,EUR,RON,HUF", table: str = "A", max_retries: int = 7
     ) -> dict:
         """
         Fetch exchange rates for multiple currencies for a given date.
