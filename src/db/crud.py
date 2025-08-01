@@ -746,16 +746,26 @@ def get_or_create_offer_with_dependencies_efficient(
     if existing_offer:
         # Update fields that might have changed
         existing_offer.name = offer_domain.name
+        existing_offer.ean = offer_domain.ean
         existing_offer.started_at = offer_domain.started_at
         existing_offer.ended_at = offer_domain.ended_at
         existing_offer.quantity_selling = offer_domain.quantity_selling
         existing_offer.price_with_tax = Decimal(offer_domain.price_with_tax)
         existing_offer.status = offer_domain.status_name
-        existing_offer.price_with_tax = offer_domain.price_with_tax
         existing_offer.product_id = prod.id  # Ensure correct product relation
 
-        session.commit()
+        # session.commit()
+        session.flush()  # Ensure existing_offer.id is set
         session.refresh(existing_offer)
+        
+        if offer_domain.is_active:
+            price_history = PriceHistory(
+                product_id=prod.id,
+                marketplace_id=mp.id,
+                date=datetime.now(),
+                price_pln=Decimal(offer_domain.price_with_tax),
+            )
+            session.add(price_history)
         return existing_offer, False
 
     # 5. Create new offer
@@ -765,7 +775,6 @@ def get_or_create_offer_with_dependencies_efficient(
         started_at=offer_domain.started_at,
         ended_at=offer_domain.ended_at,
         quantity_selling=offer_domain.quantity_selling,
-        sku=offer_domain.sku,
         ean=offer_domain.ean,
         price_with_tax=Decimal(offer_domain.price_with_tax),
         status=offer_domain.status_name,
@@ -783,6 +792,7 @@ def get_or_create_offer_with_dependencies_efficient(
         )
         session.add(price_history)
 
-    session.commit()
-    session.refresh(new_offer)
+    # session.commit()
+    # session.refresh(new_offer)
+    session.flush()  # Ensure new_offer.id is set
     return new_offer, True

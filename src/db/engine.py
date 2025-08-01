@@ -3,13 +3,11 @@ from prefect.blocks.system import Secret
 from sqlmodel import Session, create_engine, select
 from src.db.models import Offer, Order, OrderItem, Product, Marketplace, PriceHistory, StockHistory, ProductMarketplaceLink  # noqa: F401
 from src.db import crud
-
-DB_URL = Secret.load("psql-db-url").get()
-
+from src.config import settings
 
 engine = create_engine(
-    DB_URL,
-    pool_size=20,         # default is 5
+    str(settings.POSTGRES_DB_URI),
+    pool_size=20,        # default is 5
     max_overflow=0,      # default is 10
     pool_timeout=60, 
 )

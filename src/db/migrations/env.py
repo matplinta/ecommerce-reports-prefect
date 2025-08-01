@@ -16,7 +16,8 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from models import SQLModel
+from src.db.models import SQLModel
+from src.config import settings
 # target_metadata = mymodel.Base.metadata
 target_metadata = SQLModel.metadata
 
@@ -24,6 +25,10 @@ target_metadata = SQLModel.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
+def get_url():
+    print(str(settings.POSTGRES_DB_URI))
+    return str(settings.POSTGRES_DB_URI)
 
 
 def run_migrations_offline() -> None:
@@ -38,7 +43,8 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    # url = config.get_main_option("sqlalchemy.url")
+    url = get_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -57,8 +63,12 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    configuration = config.get_section(config.config_ini_section)
+    configuration["sqlalchemy.url"] = get_url()
+    
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        # config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

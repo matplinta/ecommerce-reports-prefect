@@ -4,3 +4,4 @@
 .python-version
 notebook.ipynb
 _data
+.env
