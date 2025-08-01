@@ -39,7 +39,7 @@ BATCH_NUM = Variable.get("batch-num", default=20)
 def initialize_db_config():
     """Initialize database configuration from Prefect secrets."""
     try:
-        db_url = Secret.load("psql-db-urlxxx").get()
+        db_url = Secret.load("psql-db-url").get()
         update_settings(POSTGRES_DB_URI=db_url)
     except ValueError as e:
         logger = get_run_logger()
@@ -372,7 +372,7 @@ def debug_prefect_version():
     )
 
 
-@flow(flow_run_name="DB: Sync Products", log_prints=True)
+@flow(flow_run_name="DB: Sync Products", log_prints=True, timeout_seconds=60 * 20)
 def db_sync_products():
     logger = get_run_logger()
 
@@ -405,7 +405,7 @@ def db_sync_marketplaces():
     logger.info(f"Processed {count} marketplaces")
 
 
-@flow(flow_run_name="DB: Sync Offers: Apilo", log_prints=True)
+@flow(flow_run_name="DB: Sync Offers: Apilo", log_prints=True, timeout_seconds=60 * 20)
 def db_sync_offers_apilo():
     logger = get_run_logger()
     apilo_client = get_apilo_client()
@@ -421,7 +421,7 @@ def db_sync_offers_apilo():
 
 
 @flow(
-    flow_run_name="DB: Collect Orders: previous_days={previous_days}", log_prints=True
+    flow_run_name="DB: Collect Orders: previous_days={previous_days}", log_prints=True, timeout_seconds=60 * 20
 )
 def db_collect_orders(
     previous_days: int = 1, apilo: bool = True, baselinker: bool = True
@@ -457,6 +457,7 @@ def db_collect_orders(
 @flow(
     flow_run_name="DB: Collect Orders parallel: previous_days={previous_days}",
     log_prints=True,
+    timeout_seconds=60 * 20
 )
 def db_collect_orders_parallel(
     previous_days: int = 1, apilo: bool = True, baselinker: bool = True
@@ -490,7 +491,7 @@ def db_collect_orders_parallel(
     logger.info(f"Newly created orders: {created}")
 
 
-@flow(flow_run_name="DB: Collect Stock History", log_prints=True)
+@flow(flow_run_name="DB: Collect Stock History", log_prints=True, timeout_seconds=60 * 20)
 def db_collect_stock_history(key: str):
     BUCKET_NAME = Variable.get("s3-bucket-name")
     ENDPOINT_URL = Variable.get("s3-bucket-endpoint-url")
@@ -516,6 +517,7 @@ def db_collect_stock_history(key: str):
 @flow(
     flow_run_name="DB: Collect Orders with Deps: previous_days={previous_days}",
     log_prints=True,
+    timeout_seconds=60 * 20
 )
 def db_collect_orders_with_deps(
     previous_days: int = 1, apilo: bool = True, baselinker: bool = True
