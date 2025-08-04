@@ -384,8 +384,8 @@ def db_sync_products():
         **apilo_products.result(),
     }  # Apilo products take precedence
     products = products_dict.values()
-    
-    batches = list(chunked_by_num_chunks(get_models_json_dumped(products), BATCH_NUM))
+
+    batches = list(chunked_by_num_chunks(get_models_json_dumped(products, exclude_unset=True), BATCH_NUM))
     batch_products = create_products_batch.map(batches)
     count = sum(batch_products.result())
     logger.info(f"Processed {count} products")
@@ -529,4 +529,6 @@ def db_collect_orders_with_deps(
 
 if __name__ == "__main__":
     # db_collect_orders_with_deps()
-    db_sync_offers_apilo()
+    # db_sync_offers_apilo()
+    db_sync_products()
+    # db_collect_stock_history_zzz("test.json")

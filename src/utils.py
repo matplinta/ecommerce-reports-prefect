@@ -28,8 +28,8 @@ def code_to_country(code: str) -> str | None:
         rec = None
     return rec.name if rec else None
 
-def get_models_json_dumped(objects: list) -> list[dict]:
-    return [o.model_dump(mode="json") for o in objects]
+def get_models_json_dumped(objects: list, exclude_unset=False) -> list[dict]:
+    return [o.model_dump(mode="json", exclude_unset=exclude_unset) for o in objects]
 
 
 def get_summary_string(df_sell, rename_dict):
