@@ -7,8 +7,8 @@ from src.config import settings
 
 engine = create_engine(
     str(settings.POSTGRES_DB_URI),
-    pool_size=20,        # default is 5
-    max_overflow=0,      # default is 10
+    pool_size=40,        # default is 5
+    max_overflow=20,      # default is 10
     pool_timeout=60, 
 )
 # engine = create_engine(str(settings.DB_URL), echo=True)      # echo prints SQL – good for tests
