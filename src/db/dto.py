@@ -40,6 +40,7 @@ class OrderItemCreate(SQLModel):
     price: Decimal
     price_pln: Decimal
     quantity: int
+    tax_rate: Decimal
 
 
 class OrderCreate(SQLModel):

@@ -413,6 +413,7 @@ class BaselinkerClient(AbstractClient):
                     price=float(item["price_brutto"]),
                     price_pln=convert_to_pln(float(item["price_brutto"]), currency, exchange_rates),
                     quantity=int(item["quantity"]),
+                    tax_rate=float(item["tax_rate"]),
                 )
                 for item in order["products"]
             ]

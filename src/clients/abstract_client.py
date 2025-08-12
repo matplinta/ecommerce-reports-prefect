@@ -279,7 +279,8 @@ class AbstractClient(ABC):
                             name=name,
                             price=price_brutto,
                             price_pln=convert_to_pln(price_brutto, currency, exchange_rates),
-                            quantity=int(quantity)
+                            quantity=int(quantity),
+                            # tax_rate= add
                         )
                     )
 

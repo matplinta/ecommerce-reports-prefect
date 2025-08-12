@@ -48,8 +48,9 @@ class OrderItem(BaseModel):
     price: Decimal
     price_pln: Decimal
     quantity: int
+    tax_rate: Decimal
     
-    @field_validator("price", "price_pln")
+    @field_validator("price", "price_pln", "tax_rate")
     @classmethod
     def round_to_2_decimal_places(cls, v: Decimal) -> Decimal:
         return Decimal(v).quantize(Decimal('0.01'))

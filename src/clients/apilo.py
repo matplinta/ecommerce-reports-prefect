@@ -502,6 +502,7 @@ class ApiloClient(AbstractClient):
                     price=float(item["originalPriceWithTax"]),
                     price_pln=convert_to_pln(float(item["originalPriceWithTax"]), currency, exchange_rates),
                     quantity=int(item["quantity"]),
+                    tax_rate=float(item["tax"] or 0),
                 )
                 for item in order["orderItems"] if item["type"] != 2 and item["sku"] is not None  # Exclude delivery items
             ]

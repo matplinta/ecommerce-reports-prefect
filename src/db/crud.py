@@ -411,6 +411,7 @@ def get_or_create_order_with_dependencies_efficient(
             price=Decimal(it.price),
             price_pln=Decimal(it.price_pln),
             quantity=it.quantity,
+            tax_rate=Decimal(it.tax_rate),
         )
         session.add(order_item)
 
@@ -534,6 +535,7 @@ def get_or_create_order_with_dependencies_parallel(
             price=Decimal(it.price),
             price_pln=Decimal(it.price_pln),
             quantity=it.quantity,
+            tax_rate=Decimal(it.tax_rate),
         )
         session.add(order_item)
 

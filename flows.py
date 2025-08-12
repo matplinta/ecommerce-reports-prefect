@@ -529,6 +529,6 @@ def db_collect_orders_with_deps(
 
 if __name__ == "__main__":
     # db_collect_orders_with_deps()
+    db_collect_orders_parallel()
     # db_sync_offers_apilo()
-    db_sync_products()
-    # db_collect_stock_history_zzz("test.json")
+    # db_sync_products()

@@ -1,7 +1,7 @@
 from decimal import Decimal
 from datetime import datetime
 
-from sqlalchemy import Column, Numeric, UniqueConstraint
+from sqlalchemy import Column, Numeric, UniqueConstraint, text
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -139,6 +139,11 @@ class OrderItem(SQLModel, table=True):
     price: Decimal = Field(default=0, max_digits=10, decimal_places=2, nullable=False, description="Gross price per item at the time of order")
     price_pln: Decimal = Field(default=0, max_digits=10, decimal_places=2, nullable=False, description="Gross price in PLN per item at the time of order")
     quantity: int = Field(default=1)
+    tax_rate: Decimal = Field(
+        default=Decimal("23"),
+        sa_column=Column(Numeric(5, 2), server_default=text("23"), nullable=False),
+        description="VAT rate in percent (e.g., 23 = 23%)",
+    )
 
 
     order: Order = Relationship(back_populates="items")
