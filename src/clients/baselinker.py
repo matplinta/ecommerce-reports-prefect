@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pandas as pd
 import requests
@@ -331,7 +331,6 @@ class BaselinkerClient(AbstractClient):
         sources = self.get_marketplaces()
         simplified_orders = []
         for order in orders:
-            order_date = datetime.fromtimestamp(order["date_add"], tz=self.timezone)
             order_status = order["order_status_id"]
             if self._should_ignore_order(order_status):
                 continue
@@ -394,7 +393,7 @@ class BaselinkerClient(AbstractClient):
             source_default_name = f"{source_type} - {source_name}"
             source_custom_name = self.marketplace_rename_map.get(source_default_name, source_default_name)
             
-            created_at = datetime.fromtimestamp(order["date_add"], tz=self.timezone)
+            created_at = datetime.fromtimestamp(order["date_add"], tz=pytz.utc)
             currency = order["currency"].upper()
             total_paid_gross = float(order["payment_done"])
             delivery_cost = float(order["delivery_price"])

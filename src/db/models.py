@@ -2,7 +2,7 @@ from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy import Column, Numeric, UniqueConstraint, text
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel, DateTime, Column
 
 
 # ────────────────────────────────────────────
@@ -33,8 +33,8 @@ class Offer(SQLModel, table=True):
     external_id: str = Field(index=True)  # upstream identifier (listing ID from source)
     origin_id: str = Field()  # upstream identifier (listing ID from source marketplace)
     name: str = Field(max_length=255, nullable=False)
-    started_at: datetime | None = Field(index=True)
-    ended_at: datetime | None = None
+    started_at: datetime | None = Field(sa_column=Column(DateTime(timezone=True), nullable=True, index=True))
+    ended_at: datetime | None = Field(sa_column=Column(DateTime(timezone=True), nullable=True, default=None))
     quantity_selling: int = Field(default=0, nullable=False)
     
     ean: str | None = Field(max_length=100, nullable=True)
@@ -101,7 +101,7 @@ class Order(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     external_id: str = Field(index=True)
-    created_at: datetime = Field(index=True)
+    created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
     total_gross_original: Decimal = Field(
         default=0, max_digits=10, decimal_places=2, nullable=False
     )
@@ -161,7 +161,7 @@ class PriceHistory(SQLModel, table=True):
 
     product_id: int = Field(foreign_key="product.id", ondelete="CASCADE")
     marketplace_id: int = Field(foreign_key="marketplace.id", ondelete="CASCADE")
-    date: datetime = Field(index=True)
+    date: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
     price_pln: Decimal = Field(default=0, max_digits=10, decimal_places=2, nullable=False)
 
     product: Product = Relationship(back_populates="price_history")
@@ -174,7 +174,7 @@ class StockHistory(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     product_id: int = Field(foreign_key="product.id", ondelete="CASCADE")
-    date: datetime = Field(index=True)
+    date: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False, index=True))
     stock: int
 
     product: Product = Relationship(back_populates="stock_history")

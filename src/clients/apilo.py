@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytz
 import requests
@@ -482,7 +482,7 @@ class ApiloClient(AbstractClient):
             source_custom_name = self.marketplace_rename_map.get(source_default_name, source_default_name)
             
             created_at = datetime.fromisoformat(order["createdAt"])
-            created_at = created_at.astimezone(tz=self.timezone)
+            created_at = created_at.astimezone(tz=pytz.utc)
             currency = order["originalCurrency"].upper()
             delivery_item = self.__class__._get_delivery_item(order["orderItems"])
             delivery_cost = (
@@ -571,12 +571,12 @@ class ApiloClient(AbstractClient):
             started_at = None
             if offer["startedAt"]:
                 started_at = datetime.fromisoformat(offer["startedAt"])
-                started_at = started_at.astimezone(tz=self.timezone)
+                started_at = started_at.astimezone(tz=pytz.utc)
                 
             ended_at = None
             if offer["endedAt"]:
                 ended_at = datetime.fromisoformat(offer["endedAt"])
-                ended_at = ended_at.astimezone(tz=self.timezone)
+                ended_at = ended_at.astimezone(tz=pytz.utc)
                 
             product = offer["auctionProducts"][0]
             sku = product["sku"]
