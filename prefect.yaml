@@ -40,7 +40,7 @@ deployments:
     
   - name: "db-collect-orders-with-deps"
     entrypoint: flows.py:db_collect_orders_with_deps
-    version: "2.0.0"
+    version: "2.0.1"
 
     schedules:
       - cron: "30 7 * * *"
@@ -48,7 +48,7 @@ deployments:
     
   - name: "db-sync-offers-apilo"
     entrypoint: flows.py:db_sync_offers_apilo
-    version: "3.0.0"
+    version: "3.0.1"
 
     schedules:
       - cron: "0 6 * * 1"
@@ -58,5 +58,5 @@ deployments:
 
   - name: "db-collect-stock-history"
     entrypoint: flows.py:db_collect_stock_history
-    version: "2.0.0"
+    version: "2.0.1"
 
