@@ -345,6 +345,12 @@ def get_or_create_order_with_dependencies_efficient(
         )
     ).first()
     if existing_order:
+        # Update status and ignore if they differ
+        if existing_order.status != order_domain.status:
+            existing_order.status = order_domain.status
+        if existing_order.ignore != order_domain.ignore:
+            existing_order.ignore = order_domain.ignore
+            
         return existing_order, False
 
     # 3. Products: batch get/create
@@ -378,6 +384,7 @@ def get_or_create_order_with_dependencies_efficient(
         status=order_domain.status,
         country=order_domain.country,
         city=order_domain.city,
+        ignore=order_domain.ignore,
         marketplace_id=mp.id,
     )
     session.add(order)
@@ -470,11 +477,12 @@ def upsert_product_marketplace_link(session, product_id, marketplace_id):
 
 def get_or_create_order_with_dependencies_parallel(
     *, session: Session, order_domain: OrderDomain
-) -> tuple[Order, bool]:
+) -> tuple[Order, bool, bool]:
     """
     Efficiently create a single Order from domain schema, or return existing one.
-    Returns (order, created: bool)
+    Returns (order, created: bool, changed: bool)
     """
+    changed = False
     # 1. Marketplace (upsert)
     mp = upsert_marketplace_old(
         session,
@@ -492,7 +500,18 @@ def get_or_create_order_with_dependencies_parallel(
         )
     ).first()
     if existing_order:
-        return existing_order, False
+        if existing_order.status != order_domain.status:
+            existing_order.status = order_domain.status
+            changed = True
+            # print(f"Order {existing_order.external_id} status changed to {order_domain.status}")
+
+        incoming_ignore = order_domain.ignore
+        if existing_order.ignore != incoming_ignore:
+            existing_order.ignore = incoming_ignore
+            changed = True
+            # print(f"Order {existing_order.external_id} ignore status changed to {incoming_ignore}")
+
+        return existing_order, False, changed
 
     # 3. Products: batch upsert
     skus = [it.sku for it in order_domain.items]
@@ -518,6 +537,7 @@ def get_or_create_order_with_dependencies_parallel(
         status=order_domain.status,
         country=order_domain.country,
         city=order_domain.city,
+        ignore=order_domain.ignore,
         marketplace_id=mp.id,
     )
     session.add(order)
@@ -541,7 +561,7 @@ def get_or_create_order_with_dependencies_parallel(
 
     session.commit()
     session.refresh(order)
-    return order, True
+    return order, True, changed
 
 
 def order_exists(session: Session, external_id: str, marketplace_id: int) -> bool:

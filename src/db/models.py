@@ -1,8 +1,8 @@
 from decimal import Decimal
 from datetime import datetime
 
-from sqlalchemy import Column, Numeric, UniqueConstraint, text
-from sqlmodel import Field, Relationship, SQLModel, DateTime, Column
+from sqlalchemy import Index, Numeric, UniqueConstraint, text
+from sqlmodel import Field, Relationship, SQLModel, DateTime, Column, Boolean
 
 
 # ────────────────────────────────────────────
@@ -97,7 +97,10 @@ class Product(SQLModel, table=True):
 
 class Order(SQLModel, table=True):
     __tablename__ = "order"
-    __table_args__ = (UniqueConstraint("external_id", "marketplace_id"),)
+    __table_args__ = (
+        UniqueConstraint("external_id", "marketplace_id"),
+        Index("ix_order_created_not_ignored", "created_at", postgresql_where=text("ignore = false")),
+                      )
 
     id: int | None = Field(default=None, primary_key=True)
     external_id: str = Field(index=True)
@@ -119,6 +122,10 @@ class Order(SQLModel, table=True):
     status: str | None = Field(max_length=100)
     country: str | None = Field(max_length=100)
     city: str | None = Field(max_length=100)
+    ignore: bool = Field(
+        sa_column=Column(Boolean, index=True, default=False, nullable=False, server_default=text("false")),
+        description="Exclude this order from revenue KPIs and aggregations",
+    )
 
     # FK → Marketplace
     marketplace_id: int = Field(foreign_key="marketplace.id", ondelete="CASCADE")

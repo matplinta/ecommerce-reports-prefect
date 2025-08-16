@@ -67,6 +67,7 @@ class Order(BaseModel):
     status: str
     country: str | None = None
     city: str | None = None
+    ignore: bool = False
     created_at: datetime
     marketplace_extid: str
     marketplace_name: str

@@ -97,15 +97,17 @@ def bulk_upsert_orders_parallel(order_domain_dicts: list[dict]):
     Bulk upsert orders with dependencies into database.
     """
     created_list = []
+    changed_list = []
     with Session(engine) as session:
         for order_dict in order_domain_dicts:
             order_domain = Order.model_validate(order_dict)
-            _, was_created = get_or_create_order_with_dependencies_parallel(
+            _, was_created, _was_changed = get_or_create_order_with_dependencies_parallel(
                 session=session, order_domain=order_domain
             )
             created_list.append(was_created)
+            changed_list.append(_was_changed)
         session.commit()
-    return sum(created_list)
+    return sum(created_list), sum(changed_list)
 
 
 def bulk_create_stock_history(products: list[ProductStock], date: datetime) -> int:

@@ -375,8 +375,7 @@ class BaselinkerClient(AbstractClient):
         for order in orders:
             order_status_id = order["order_status_id"]
             order_status_name = status_types.get(order_status_id, None).capitalize()
-            if self._should_ignore_order(order_status_id):
-                continue
+            ignore = self._should_ignore_order(order_status_id)
 
             if "products" not in order.keys():
                 continue
@@ -429,6 +428,7 @@ class BaselinkerClient(AbstractClient):
                     status=order_status_name,
                     country=country,
                     city=city,
+                    ignore=ignore,
                     created_at=created_at,
                     marketplace_extid=str(source_id),
                     marketplace_name=source_custom_name,

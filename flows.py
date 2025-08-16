@@ -487,8 +487,12 @@ def db_collect_orders_parallel(
     # batches = list(chunked_by_chunk_size(order_dicts, batch_size))
     batches = list(chunked_by_num_chunks(get_models_json_dumped(orders), BATCH_NUM))
     batch_orders = create_orders_batch.map(batches)
-    created = sum(batch_orders.result())
+    results = batch_orders.result()
+    created = sum(r[0] for r in results)
+    changed = sum(r[1] for r in results)
+
     logger.info(f"Newly created orders: {created}")
+    logger.info(f"Changed orders: {changed}")
 
 
 @flow(flow_run_name="DB: Collect Stock History", log_prints=True, timeout_seconds=60 * 20)
@@ -529,6 +533,6 @@ def db_collect_orders_with_deps(
 
 if __name__ == "__main__":
     # db_collect_orders_with_deps()
-    db_collect_orders_parallel()
+    db_collect_orders_parallel(previous_days=30)
     # db_sync_offers_apilo()
     # db_sync_products()
