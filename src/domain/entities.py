@@ -16,6 +16,13 @@ class Product(BaseModel):
     kind: str | None = None
     unit_purchase_cost: Decimal | None = None
     
+    @field_validator("name")
+    @classmethod
+    def replace_single_quote_with_double(cls, v: str | None) -> str | None:
+        if v is not None:
+            return v.replace("'", '"')
+        return v
+    
 class ProductStock(Product):
     stock: int
 

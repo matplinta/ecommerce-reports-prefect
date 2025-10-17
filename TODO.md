@@ -40,7 +40,7 @@
 
     ```
   </details>
-- [ ] Looker Studio graphs
+- [x] Looker Studio graphs
   <details><summary>Details</summary>
   Here are practical, *insightful* charts you can build in Looker Studio with your current tables. I’ve grouped them by theme and noted **Dimensions / Metrics** (and when a small SQL view helps).
 
@@ -251,7 +251,7 @@
     https://chatgpt.com/c/68860a35-372c-8327-b648-0affda6e137a
     </details>
 
-- [ ] create streamlit app for stock tracking
+- [x] create streamlit app for stock tracking
 https://chatgpt.com/c/68878a65-a4c8-832a-82fe-f34268c4a0e1
 
 - [x] refactor flows.py to import vars only per flow when needed

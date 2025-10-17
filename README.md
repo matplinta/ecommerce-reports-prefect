@@ -1,6 +1,6 @@
 # 📊 Ecommerce Reports Prefect
 
-Generate daily ecommerce sell reports from Apilo and Baselinker APIs. The workflows are defined using Prefect to orchestrate tasks like fetching exchange rates, gathering statistics, and creating formatted report artifacts.
+Generate daily ecommerce sell reports from Apilo and Baselinker APIs. The workflows are defined using Prefect to orchestrate tasks like fetching exchange rates, gathering statistics, and creating formatted report artifacts as well as writing to a postgres DB.
 
 ## Overview
 
@@ -10,6 +10,7 @@ Generate daily ecommerce sell reports from Apilo and Baselinker APIs. The workfl
   - Fetching sell statistics from Apilo and Baselinker
   - Converting currency values to PLN
   - Generating summary reports and artifacts
+  - Writing data to postgres DB
 
 - **APIs:**  
   It integrates with external APIs for ecommerce data from:
@@ -38,14 +39,9 @@ Before running the flows, ensure you have properly defined the following Secrets
 
 | Key         | Description                                                    |
 |-------------|----------------------------------------------------------------|
-| rename-dict | A dictionary for renaming marketplace keys in the final report |
+| marketplace-rename-map | A dictionary for renaming marketplace keys in the final report |
 
 ### Optional Secrets and Variables
-
-#### RapidAPI
-
-- Secret `rapidapi-key` (optional): Your RapidAPI key  
-- Secret `rapidapi-host` (optional): Your RapidAPI host  
 
 #### Email via Gmail
 
@@ -63,6 +59,15 @@ Before running the flows, ensure you have properly defined the following Secrets
 - Variable `sheet-id` being a string with sheet-id from Google Sheets
 - Variable `worksheet-name` [optional] - worksheet name, defaults to "Dane"
 
+#### Postgres
+
+- Secret `psql-db-url` containing db uri of the postgres database.
+
+#### Misc
+
+- Variable  `timezone-pytz-str` containing the pytz timezone string. Defaults to "Europe/Warsaw"
+- Variable `baselinker-order-status-ids-to-ignore` containing a list of ids in integers of statuses which should be globally ignored during data collection from Baselinker
+- Variable `apilo-order-status-ids-to-ignore` containing a list of ids in integers of statuses which should be globally ignored during data collection from Apilo
 
 ## Running and scheduling the flows
 
@@ -115,6 +120,50 @@ Refreshes the Apilo API token and updates the corresponding Prefect Secrets.
 ### **get_apilo_token_secret**  
 Displays the current Apilo token stored in the Prefect Secret.
 
+### **debug_prefect_version**  
+Displays the current prefect version. Used only for debugging purposes.
+
+### **db_sync_products**  
+Synchronizes product data from external sources (Apilo and Baselinker) into the Postgres database. Performs upserts to ensure the database reflects the latest product information.  
+**Parameters:**  
+_None_
+
+### **db_sync_marketplaces**  
+Synchronizes marketplace data from Apilo and Baselinker APIs into the database, updating or inserting marketplace records as needed.  
+**Parameters:**  
+_None_
+
+### **db_sync_offers_apilo**  
+Fetches offer data from Apilo, processes it, and upserts offers into the database, ensuring offer records are current.  
+**Parameters:**  
+_None_
+
+### **db_collect_orders**  
+Collects order data from Apilo and Baselinker for a specified date range and writes the results to the database. Uses serial process approach.  
+**Parameters:**  
+- `previous_days` (int): Number of previous days to include  
+- `apilo` (bool): If true, collects orders from Apilo  
+- `baselinker` (bool): If true, collects orders from Baselinker
+
+### **db_collect_orders_parallel**  
+Collects orders from Apilo and Baselinker in parallel batches for improved performance, then writes the results to the database.  
+**Parameters:**  
+- `previous_days` (int): Number of previous days to include  
+- `apilo` (bool): If true, collects orders from Apilo  
+- `baselinker` (bool): If true, collects orders from Baselinker
+
+### **db_collect_orders_with_deps**  
+Collects orders along with all required dependencies (such as products and marketplaces), ensuring all related data is synchronized in the database. Made mainly for workaround purposes related to limited deployments in prefect cloud.  
+**Parameters:**  
+- `previous_days` (int): Number of previous days to include  
+- `apilo` (bool): If true, collects orders from Apilo  
+- `baselinker` (bool): If true, collects orders from Baselinker
+
+### **db_collect_stock_history**  
+Collects and stores historical stock levels for products, enabling tracking of inventory changes over time.  
+**Parameters:**  
+- `key` (str): S3 key for the stock file to process
+
 # Migrations (alembic)
 Change src/db/alembic.ini `sqlalchemy.url` value to the connection to db url
 ```
@@ -124,3 +173,17 @@ alembic revision --autogenerate -m "add unit_purchace_cost to Product"
 ```
 alembic upgrade head
 ```
+
+# Local development
+
+For local development, use provided preconfigured routines defined in justfile. 
+
+If you wish to use local database, change the following line inside `flows.py` in `initialize_db_config`:
+```python
+db_url = Secret.load("psql-db-url").get()
+```
+
+So that the secret is not recognized from the cloud (so for example change "psql-db-url" to "xxxxx"). This will trigger the except statement to use the default value, which should be defined inside the .env file as: 
+```
+POSTGRES_DB_URI="postgresql+psycopg2://dev:secret@localhost:5432/shop"
+``` 
