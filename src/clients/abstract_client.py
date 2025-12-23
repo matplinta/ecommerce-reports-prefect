@@ -117,22 +117,6 @@ class AbstractClient(ABC):
         orders = self.get_orders(date_from=date_from, date_to=date_to, **kwargs)
         simplified_orders = self._to_simplified_orders(orders)
         return self._summarize_orders(simplified_orders, conversion_rates)
-    
-    def _to_domain_marketplaces(self, marketplaces):
-        """Converts marketplaces to a domain format."""
-        domain_marketplaces = []
-        for ext_id, data in marketplaces.items():
-            default_name = f"{data['type']} - {data['name']}"
-            name = self.marketplace_rename_map.get(default_name, default_name)
-            domain_marketplaces.append(
-                Marketplace(
-                    external_id=str(ext_id),
-                    platform_origin=self.platform_origin,
-                    type=data["type"],
-                    name=name
-                )
-            )
-        return domain_marketplaces
 
     def get_marketplaces_in_domain_format(self) -> list[Marketplace]:
         """Returns marketplaces in a domain format."""
@@ -177,6 +161,9 @@ class AbstractClient(ABC):
     
     @abstractmethod
     def _to_domain_products(self): ...
+    
+    @abstractmethod
+    def _to_domain_marketplaces(self): ...
     
     
     def get_orders_from_xml(self, directory, date_from=None):

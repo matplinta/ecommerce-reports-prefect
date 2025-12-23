@@ -64,15 +64,47 @@ class BaselinkerClient(AbstractClient):
         """Returns a dictionary of marketplaces (order sources) by ID.
         Example data:
         {
-            "123123": {"name": "plus.cz", "type": "Allegro"},
-            "123124": {"name": "plus.sk", "type": "Erli"},
-            "123125": {"name": "acplus.cz", "type": "shop"},
-            "123126": {"name": "Gear.cz", "type": "Allegro"}
+            ('personal', '0'): {
+                'name': 'Osobiście/tel.',
+                'type': 'personal',
+                'source_id': '0'},
+            ('shop', '590'): {
+                'name': 'plus.cz',
+                'type': 'shop',
+                'source_id': '590'},
+            ('shop', '8591'): {
+                'name': 'plus.sk',
+                'type': 'shop',
+                'source_id': '8591'},
+            ('shop', '3034'): {
+                'name': 'Grill.cz',
+                'type': 'shop',
+                'source_id': '3034'},
+            ('shop', '3026'): {
+                'name': 'Nacz',
+                'type': 'shop',
+                'source_id': '3026'},
+            ('kauflandcz', '32'): {
+                'name': 'Kaufland',
+                'type': 'kauflandcz',
+                'source_id': '32'},
+            ('heureka', '280'): {
+                'name': 'plus.cz',
+                'type': 'heureka',
+                'source_id': '280'},
+            ('order_return', '0'): {
+                'name': 'Zwrot do zamówienia',
+                'type': 'order_return',
+                'source_id': '0'}
         }
         """
         sources = self.get_order_sources()
         return {
-            source_id: {"name": name, "type": market_type}
+            (market_type, str(source_id)): {
+                "name": name,
+                "type": market_type,
+                "source_id": str(source_id),
+            }
             for market_type, id_name_map in sources.items()
             for source_id, name in id_name_map.items()
         }
@@ -341,7 +373,7 @@ class BaselinkerClient(AbstractClient):
             order_id = order["order_id"]
             source_type = order["order_source"]
             source_id = str(order["order_source_id"])
-            source_type, source_name = sources[source_id]["type"], sources[source_id]["name"]
+            source_name = sources[(source_type, source_id)]["name"]
             source_default_name = f"{source_type} - {source_name}"
             source_custom_name = self.marketplace_rename_map.get(source_default_name, source_default_name)
             payment_done = float(order["payment_done"])
@@ -363,6 +395,21 @@ class BaselinkerClient(AbstractClient):
             simplified_orders.append(simplified_order)
         return simplified_orders
     
+    def _to_domain_marketplaces(self, marketplaces):
+        """Converts marketplaces to a domain format."""
+        domain_marketplaces = []
+        for (market_type, source_id), data in marketplaces.items():
+            default_name = f"{data['type']} - {data['name']}"
+            name = self.marketplace_rename_map.get(default_name, default_name)
+            domain_marketplaces.append(
+                Marketplace(
+                    external_id=str(data["source_id"]),
+                    platform_origin=self.platform_origin,
+                    type=data["type"],
+                    name=name
+                )
+            )
+        return domain_marketplaces
     
     def _to_domain_orders(self, orders, exchange_rates):
         """Converts orders to a canonical format for easier processing.
@@ -388,7 +435,7 @@ class BaselinkerClient(AbstractClient):
             order_id = order["order_id"]
             source_type = order["order_source"]
             source_id = str(order["order_source_id"])
-            source_type, source_name = sources[source_id]["type"], sources[source_id]["name"]
+            source_name = sources[(source_type, source_id)]["name"]
             source_default_name = f"{source_type} - {source_name}"
             source_custom_name = self.marketplace_rename_map.get(source_default_name, source_default_name)
             

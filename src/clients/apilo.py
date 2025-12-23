@@ -450,6 +450,22 @@ class ApiloClient(AbstractClient):
             }
             simplified_orders.append(simplified_order)
         return simplified_orders
+    
+    def _to_domain_marketplaces(self, marketplaces):
+        """Converts marketplaces to a domain format."""
+        domain_marketplaces = []
+        for ext_id, data in marketplaces.items():
+            default_name = f"{data['type']} - {data['name']}"
+            name = self.marketplace_rename_map.get(default_name, default_name)
+            domain_marketplaces.append(
+                Marketplace(
+                    external_id=str(ext_id),
+                    platform_origin=self.platform_origin,
+                    type=data["type"],
+                    name=name
+                )
+            )
+        return domain_marketplaces
 
     def _to_domain_orders(self, orders, exchange_rates):
         """Converts orders to a domain format for easier processing.
