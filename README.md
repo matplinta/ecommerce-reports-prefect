@@ -165,11 +165,24 @@ Collects and stores historical stock levels for products, enabling tracking of i
 - `key` (str): S3 key for the stock file to process
 
 # Migrations (alembic)
-Change src/db/alembic.ini `sqlalchemy.url` value to the connection to db url
+Change src/db/alembic.ini `sqlalchemy.url` value to the connection to db url 
+
+OR
+
+just change the **POSTGRES_DB_URI** in the `src/config.py` (or the top level setting in the .env file)
+
+First, let's suppose you want to create migration in your local environment. 
+If you have already a long standing DB with previous alembic_version specified, then you just need to run the following lines.
+
+> Warning! 
+> 
+> If you created a new local DB from scratch (maybe using `just purge-local-db` followed by `just init-db`), then you first need to run `alembic stamp head` to let the alembic know that this is the newest version of the schemas. Only then you should make the model changes that you require in your code, and then run the following lines (creating the migraiton and actually applying it). 
+
+To generate a new migration:
 ```
 alembic revision --autogenerate -m "add unit_purchace_cost to Product"
 ```
-
+Then to apply the migrations to your DB instance:
 ```
 alembic upgrade head
 ```

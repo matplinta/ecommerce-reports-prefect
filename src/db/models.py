@@ -79,6 +79,7 @@ class Product(SQLModel, table=True):
     unit_purchase_cost: Decimal | None = Field(
         default=0, max_digits=10, decimal_places=2, description="Unit purchase cost of the product"
     )
+    category: str | None = Field(default=None, description="Category of the product")
     
 
     marketplaces: list[Marketplace] = Relationship(

@@ -681,7 +681,7 @@ def create_stock_history_with_upsert_product(
 
     Args:
         session: SQLModel Session
-        product_data: Dict with product details (sku, name, kind, stock, unit_purchase_cost)
+        product_data: Dict with product details (sku, name, kind, stock, unit_purchase_cost, categrory)
         date: Date for stock history (defaults to current date)
 
     Returns:
@@ -695,6 +695,7 @@ def create_stock_history_with_upsert_product(
         name=product_stock.name,
         kind=product_stock.kind,
         unit_purchase_cost=product_stock.unit_purchase_cost,
+        category=product_stock.category,
     )
     product = upsert_product(session, product_domain, name_overwrite=False)
 

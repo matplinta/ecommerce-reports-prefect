@@ -15,6 +15,7 @@ class Product(BaseModel):
     image_url: str | None = None
     kind: str | None = None
     unit_purchase_cost: Decimal | None = None
+    category: str | None = None
     
     @field_validator("name")
     @classmethod
