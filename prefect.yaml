@@ -45,12 +45,12 @@ deployments:
     schedules:
       - cron: "30 7 * * *"
         timezone: "Europe/Warsaw"
-      - cron: "0 7 1,15 * *"
+      - cron: "30 8 * * 4"
         timezone: "Europe/Warsaw"
     
   - name: "db-sync-offers-apilo"
     entrypoint: flows.py:db_sync_offers_apilo
-    version: "5.0.0"
+    version: "5.1.0"
 
     schedules:
       - cron: "0 6 * * 1"
