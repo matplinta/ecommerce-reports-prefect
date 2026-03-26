@@ -600,6 +600,9 @@ class ApiloClient(AbstractClient):
             quantity_selling = product["quantitySelling"]
             price_with_tax = float(product["priceWithTax"])
             marketplace_extid = offer["platformAccount"]["id"]
+            if marketplace_extid not in marketplaces:
+                print(f"Warning: Marketplace with ID {marketplace_extid} not found in marketplaces list. Skipping offer with ID {offer['id']}.")
+                continue
             marketplace_type = marketplaces.get(marketplace_extid).get("type")
             marketplace_name = marketplaces.get(marketplace_extid).get("name")
             marketplace_type, marketplace_name = marketplaces[marketplace_extid]["type"], marketplaces[marketplace_extid]["name"]
