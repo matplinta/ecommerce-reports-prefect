@@ -53,7 +53,7 @@ deployments:
         slug: "daily"
       - cron: "30 8 * * 4"
         timezone: "Europe/Warsaw"
-        slug: "45 days"
+        slug: "last-45-days"
         parameters:
           previous_days: 45
     
