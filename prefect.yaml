@@ -24,6 +24,7 @@ deployments:
     schedules:
       - interval: 1209600  # 14 days in seconds
         timezone: "Europe/Warsaw"
+        slug: "biweekly"
 
   - name: "daily sell reports"
     entrypoint: flows.py:get_sell_report
@@ -34,9 +35,13 @@ deployments:
     schedules:
       - cron: "0 7 * * 1"
         timezone: "Europe/Warsaw"
+        slug: "weekly"
+        parameters:
+          previous_days: 3
 
       - cron: "0 7 * * *"
         timezone: "Europe/Warsaw"
+        slug: "daily"
     
   - name: "db-collect-orders-with-deps"
     entrypoint: flows.py:db_collect_orders_with_deps
@@ -45,8 +50,12 @@ deployments:
     schedules:
       - cron: "30 7 * * *"
         timezone: "Europe/Warsaw"
+        slug: "daily"
       - cron: "30 8 * * 4"
         timezone: "Europe/Warsaw"
+        slug: "45 days"
+        parameters:
+          previous_days: 45
     
   - name: "db-sync-offers-apilo"
     entrypoint: flows.py:db_sync_offers_apilo
@@ -55,8 +64,10 @@ deployments:
     schedules:
       - cron: "0 6 * * 1"
         timezone: "Europe/Warsaw"
+        slug: "weekly"
       - cron: "0 6 * * 4"
         timezone: "Europe/Warsaw"
+        slug: "weekly-thursday"
 
   - name: "db-collect-stock-history"
     entrypoint: flows.py:db_collect_stock_history
