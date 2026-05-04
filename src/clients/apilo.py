@@ -114,7 +114,7 @@ class ApiloClient(AbstractClient):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.token}",
         }
-        request_url = f"{self.url}/rest/api/{path}"
+        request_url = f"{self.url}/rest/api/{path}/" if not path.endswith("/") else f"{self.url}/rest/api/{path}"
         response = requests.get(request_url, headers=headers, params=query_params)
         try:
             response.raise_for_status()
@@ -273,7 +273,7 @@ class ApiloClient(AbstractClient):
     
     def get_order_status_types(self):
         """Returns a dictionary of order status types. Consists of status ID as key and status name as value."""
-        response = self._make_request(path="orders/status/map")
+        response = self._make_request(path="orders/status/map/")
         return {elem["id"]: elem["name"] for elem in response}
 
     def get_order_sources(self):
@@ -310,7 +310,7 @@ class ApiloClient(AbstractClient):
         }
         """
 
-        response = self._make_request(path="sale")
+        response = self._make_request(path="sale/")
         return response
         
     def get_marketplaces(self):

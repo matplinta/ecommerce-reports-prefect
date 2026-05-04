@@ -20,7 +20,7 @@ deployments:
 
   - name: "refresh apilo token"
     entrypoint: flows.py:refresh_apilo_token
-    version: "1.0.0"
+    version: "2.0.0"
     schedules:
       - interval: 1209600  # 14 days in seconds
         timezone: "Europe/Warsaw"
@@ -28,7 +28,7 @@ deployments:
 
   - name: "daily sell reports"
     entrypoint: flows.py:get_sell_report
-    version: "2.1.0"
+    version: "3.0.0"
     parameters:
       slack: true
 
@@ -45,7 +45,7 @@ deployments:
     
   - name: "db-collect-orders-with-deps"
     entrypoint: flows.py:db_collect_orders_with_deps
-    version: "4.1.0"
+    version: "5.0.0"
 
     schedules:
       - cron: "30 7 * * *"
@@ -59,7 +59,7 @@ deployments:
     
   - name: "db-sync-offers-apilo"
     entrypoint: flows.py:db_sync_offers_apilo
-    version: "5.2.0"
+    version: "6.0.0"
 
     schedules:
       - cron: "0 6 * * 1"
@@ -71,5 +71,5 @@ deployments:
 
   - name: "db-collect-stock-history"
     entrypoint: flows.py:db_collect_stock_history
-    version: "4.0.0"
+    version: "5.0.0"
 
