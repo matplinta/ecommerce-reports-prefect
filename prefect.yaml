@@ -28,7 +28,7 @@ deployments:
 
   - name: "daily sell reports"
     entrypoint: flows.py:get_sell_report
-    version: "3.0.0"
+    version: "3.1.0"
     parameters:
       slack: true
 
