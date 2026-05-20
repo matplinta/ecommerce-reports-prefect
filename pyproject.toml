@@ -18,6 +18,7 @@ dependencies = [
     "pytz>=2025.2",
     "requests>=2.32.3",
     "sqlmodel[asyncio]>=0.0.24",
+    "importlib-metadata<9.0.0"
 ]
 
 [dependency-groups]
