@@ -18,7 +18,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     
-    POSTGRES_DB_URI: str = "postgresql+psycopg2://dev:secret@localhost:5432/shop"
+    POSTGRES_DB_URI: str = "postgresql+psycopg://dev:secret@localhost:5432/shop"
 
     # POSTGRES_SERVER: str
     # POSTGRES_PORT: int = 5432
