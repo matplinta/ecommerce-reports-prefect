@@ -5,8 +5,9 @@ set -euo pipefail
 apt-get update && apt-get install -y --no-install-recommends build-essential
 
 RUNTIME_PYTHON=$(python -c 'import sys; print(sys.executable)')
-PREFECT_VERSION=$("$RUNTIME_PYTHON" -c 'from importlib.metadata import version; print(version("prefect"))')
-PACKAGING_VERSION=$("$RUNTIME_PYTHON" -c 'from importlib.metadata import version; print(version("packaging"))')
+# The prefect module can come from the prefect-client distribution.
+PREFECT_VERSION=$("$RUNTIME_PYTHON" -c 'import prefect; print(prefect.__version__)')
+PACKAGING_VERSION=$("$RUNTIME_PYTHON" -c 'import packaging; print(packaging.__version__)')
 echo "Image prefect version: ${PREFECT_VERSION}"
 echo "Image packaging version: ${PACKAGING_VERSION}"
 
